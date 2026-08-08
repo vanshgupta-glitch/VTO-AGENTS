@@ -14,6 +14,9 @@ This repo holds the design. The implementation is built fresh in a separate repo
 | [PRD.md](doc/PRD.md) | Product requirements v3.0 — what the system does, the 12-agent roster, the three loops, features classified must-have vs nice-to-have, user flows, MVP phasing, success metrics, and explicit non-goals |
 | [TECHNICAL-ARCHITECTURE.md](doc/TECHNICAL-ARCHITECTURE.md) | Technical architecture v3.0 — tech stack with reasoning, full folder structure, 20-table database schema explained in plain English, environment variables, configuration gotchas, and the build sequence |
 | [DRIFT-AND-CONSISTENCY.md](doc/DRIFT-AND-CONSISTENCY.md) | The working plan for the hardest part — keeping agents on track and configuration coherent. Failure taxonomy, the enforcement ladder, what gets measured, the debugging protocol, and what can't be solved |
+| [PROGRESSIVE-DOCS.md](doc/PROGRESSIVE-DOCS.md) | Specification and templates for `llm.md`, `CLAUDE.md`, `trajectory.md` — the division-of-content rule, the ENRICH procedure with its verification pass, and the anti-patterns that make them rot |
+| [trajectory.md](doc/trajectory.md) | This project's own trajectory document — goal, status, history, priorities, open issues, risks, roadmap, and the questions for the next session |
+| [standards/fully-kitted.md](doc/standards/fully-kitted.md) | The error-state and logging bar every change must clear, as a Critic checklist |
 
 ### Retained research
 
