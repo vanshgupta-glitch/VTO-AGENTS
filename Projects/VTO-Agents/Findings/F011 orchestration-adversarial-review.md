@@ -5,13 +5,28 @@ type: finding
 project: VTO
 status: done
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-08
 tags: [finding, orchestration, adversarial-review, refutation, verification]
 source_agent: Orchestration-Researcher
 source_task: T011 Swarm-Orchestration-Automation
 ---
 
 # F011 — Adversarial Finding Review (adapted from nmg-vto refutation pattern)
+
+> ## ⚠ SCOPE CORRECTION — 2026-08-08 (see [[decision]] D-020)
+>
+> **This finding applies to verifying research *claims* after the fact. It must NOT be used
+> as the pre-code design review.**
+>
+> The refutation stance below — *"Do NOT confirm; your ONLY job is to find flaws"* — is correct
+> for checking whether a stated fact survives its evidence. Applied to a *plan* before coding,
+> it is counterproductive: an operator running this architecture in production reports that pure
+> adversarial review yields results that are *"overly conservative"* and *"lack optimism on
+> solutions."*
+>
+> Pre-code review uses the **Constructive Critic** instead — a helpful skeptic where every risk
+> raised must be paired with a viable alternative ([[PRD]] §6.5). Two different instruments, two
+> different jobs. Nothing below is withdrawn; its scope is narrowed to research findings.
 
 ## Question
 
