@@ -9,7 +9,6 @@ updated: 2026-08-08
 version: 3.0
 owner: Product
 supersedes: ["[[SLACK-ORCHESTRATION]]", "[[ENGINEERING-LOOP]]", "[[AGENT-HIERARCHY]]", "PRD v2.0"]
-incorporates: "[[GAP-ANALYSIS]] G1–G12"
 tags: [prd, orchestration, multi-agent, slack, swarm]
 ---
 
@@ -17,7 +16,7 @@ tags: [prd, orchestration, multi-agent, slack, swarm]
 
 **Version 3.0** · Draft for review · 2026-08-08
 **Supersedes:** [[SLACK-ORCHESTRATION]], [[ENGINEERING-LOOP]], [[AGENT-HIERARCHY]], and PRD v2.0.
-**Rewritten from scratch** to incorporate all twelve findings in [[GAP-ANALYSIS]]. v2.0 had the right tier structure and the wrong context strategy; this version fixes that at the root rather than patching it.
+**Rewritten from scratch.** v2.0 had the right tier structure and the wrong context strategy — it fed every tier the same firehose of channel history, which would have buried the strategist in execution noise. This version fixes that at the root: context discipline, progressive documents, a blocking pre-code critic, and document-mediated hand-off are designed in rather than patched on.
 
 ---
 
@@ -785,4 +784,4 @@ Each exclusion has a reason. Revisiting any of them requires evidence, not enthu
 
 ## Related
 
-[[TECHNICAL-ARCHITECTURE]] · [[GAP-ANALYSIS]] · [[VTO]] · [[VTO-Agents]] · [[F011 orchestration-failure-modes]] · [[F011 orchestration-metrics]] · [[F011 orchestration-context-hygiene]] · [[F011 orchestration-adversarial-review]]
+[[TECHNICAL-ARCHITECTURE]] · [[VTO]] · [[F011 orchestration-failure-modes]] · [[F011 orchestration-metrics]] · [[F011 orchestration-context-hygiene]] · [[F011 orchestration-adversarial-review]]

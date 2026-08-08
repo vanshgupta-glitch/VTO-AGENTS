@@ -9,8 +9,7 @@ updated: 2026-08-08
 version: 3.0
 owner: Engineering
 supersedes: "TAD v2.0"
-incorporates: "[[GAP-ANALYSIS]] G1–G12"
-related: ["[[PRD]]", "[[GAP-ANALYSIS]]"]
+related: ["[[PRD]]"]
 tags: [architecture, tad, multi-agent, slack, schema, stack]
 ---
 
@@ -18,7 +17,7 @@ tags: [architecture, tad, multi-agent, slack, schema, stack]
 
 **Version 3.0** · Draft for review · 2026-08-08
 **Companion to:** [[PRD]] v3.0 (what and why). This document is *how*.
-**Rewritten from scratch** to build in all twelve findings of [[GAP-ANALYSIS]]. v2.0's context strategy was wrong at the root; this version treats context discipline as a first-class subsystem rather than a parameter.
+**Rewritten from scratch.** v2.0's context strategy was wrong at the root — one assembly path for all three tiers. This version treats context discipline as a first-class subsystem with its own package and its own lint rule, rather than a parameter someone can route around.
 
 ---
 
@@ -464,7 +463,7 @@ swarm/
 │  ├─ artifacts/{diffs,frames,reports}/
 │  └─ logs/
 │
-└─ doc/                          # PRD · TECHNICAL-ARCHITECTURE · GAP-ANALYSIS
+└─ doc/                          # PRD · TECHNICAL-ARCHITECTURE
 ```
 
 **Documents live in the target repo, not here.** `llm.md`, `CLAUDE.md`, `trajectory.md`, `docs/issues/`, `docs/work-orders/`, and `docs/standards/fully-kitted.md` are written into `VTO_REPO_PATH`, because they describe that codebase and must version alongside it.
@@ -1066,4 +1065,4 @@ Ordered by dependency and by risk-retired per unit of effort.
 
 ## Related
 
-[[PRD]] · [[GAP-ANALYSIS]] · [[SLACK-ORCHESTRATION]] · [[AGENT-HIERARCHY]] · [[ENGINEERING-LOOP]] · [[F011 orchestration-metrics]] · [[F011 orchestration-failure-modes]] · [[F011 orchestration-context-hygiene]]
+[[PRD]] · [[VTO]] · [[F011 orchestration-metrics]] · [[F011 orchestration-failure-modes]] · [[F011 orchestration-context-hygiene]]
