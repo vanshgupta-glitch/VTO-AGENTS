@@ -12,6 +12,7 @@ This repo holds the design. The implementation is built fresh in a separate repo
 |---|---|
 | [PRD.md](doc/PRD.md) | Product requirements v3.0 — what the system does, the 12-agent roster, the three loops, features classified must-have vs nice-to-have, user flows, MVP phasing, success metrics, and explicit non-goals |
 | [TECHNICAL-ARCHITECTURE.md](doc/TECHNICAL-ARCHITECTURE.md) | Technical architecture v3.0 — tech stack with reasoning, full folder structure, 20-table database schema explained in plain English, environment variables, configuration gotchas, and the build sequence |
+| [DRIFT-AND-CONSISTENCY.md](doc/DRIFT-AND-CONSISTENCY.md) | The working plan for the hardest part — keeping agents on track and configuration coherent. Failure taxonomy, the enforcement ladder, what gets measured, the debugging protocol, and what can't be solved |
 
 ### Retained research
 
