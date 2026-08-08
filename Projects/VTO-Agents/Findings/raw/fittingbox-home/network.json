@@ -1,0 +1,1017 @@
+[
+ {
+  "url": "https://www.fittingbox.com/",
+  "status": 301,
+  "resourceType": "document",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/LOGO-FITTINGBOX-MINIMALISTE-RVB-NOIR.svg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://fittingbox.com/",
+  "status": 200,
+  "resourceType": "document",
+  "contentType": "text/html; charset=UTF-8",
+  "bytes": 132929
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/80445146037/1784133467964/module_new-navigation-fixed.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 2988
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/166203514549/1742856310296/module_Client_Logos.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 1244
+ },
+ {
+  "url": "https://fittingbox.com/hs/hsstatic/cos-LanguageSwitcher/static-1.336/sass/LanguageSwitcher.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 1328
+ },
+ {
+  "url": "https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.9.0/slick-theme.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css; charset=utf-8",
+  "bytes": 657
+ },
+ {
+  "url": "https://cdnjs.cloudflare.com/ajax/libs/splidejs/4.1.4/css/splide.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css; charset=utf-8",
+  "bytes": 1097
+ },
+ {
+  "url": "https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.9.0/slick.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css; charset=utf-8",
+  "bytes": 394
+ },
+ {
+  "url": "https://code.jquery.com/jquery-3.6.0.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 30875
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/39147405916/1740982067883/module_partners.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 43
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/template_assets/1/38363145144/1784127471361/template_main.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 263879
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/template_assets/1/38363049447/1784207230112/template_theme-overrides.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 22038
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/38596677956/1784196609462/module_two-cols-img-text.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 1422
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/39147405914/1756818767841/module_multi-columns-text.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 470
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/180125081445/1742856319354/module_CounterMaster_Pro.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 471
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/39148041459/1781093575411/module_slider-banner.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 764
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/39148046060/1773159560588/module_square-image-slider.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 331
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/40907304686/1774359301016/module_vto-module.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 187
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/LOGO-FITTINGBOX-MINIMALISTE-RVB-NOIR.svg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/svg+xml",
+  "bytes": 16781
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/6188979636/1742856166549/module_Hero_Banner_LP.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 617
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/182844678795/1753884441636/module_Testimonials_with_Multiple_Options.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 677
+ },
+ {
+  "url": "https://fittingbox.com/hs/hsstatic/cos-i18n/static-1.53/bundles/project.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 1243
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/template_assets/1/38363049449/1784195874875/template_main.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "text/javascript",
+  "bytes": 350157
+ },
+ {
+  "url": "https://cdn.jsdelivr.net/npm/@splidejs/splide-extension-auto-scroll@0.5.3/dist/js/splide-extension-auto-scroll.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 2521
+ },
+ {
+  "url": "https://cdnjs.cloudflare.com/ajax/libs/splidejs/4.1.4/js/splide.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 11667
+ },
+ {
+  "url": "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css; charset=utf-8",
+  "bytes": 34092
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/WEBP%20images%20-%202022/Hero-Femme-try-on-medium-1.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/WEBP%20images/Slider%20Banner%20webp/%5BFBx%5Dslider-banner-advanced-1a.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20De%20Rigo-1.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20Eyerim.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20JINS.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/multiopticas.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20Fielmann.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-afflelou.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/kits.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Pair-Eyewear.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Fashion-Eyewear.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Baxter-Blue.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/ferragamo.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/Logo%20Marchon.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://fittingbox.com/hs/scriptloader/3439223.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript;charset=utf-8",
+  "bytes": 763
+ },
+ {
+  "url": "https://js.hs-scripts.com/3439223.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript;charset=utf-8",
+  "bytes": 763
+ },
+ {
+  "url": "https://code.jquery.com/jquery-3.7.1.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 30336
+ },
+ {
+  "url": "https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 10910
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/module_assets/1/40907304686/1774359301016/module_vto-module.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 491
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/js/jquery.matchHeight.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 11777
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/alensa%20logo.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Lacoste_logo.svg.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/670x300%20BW/Logo%20Transitions%20BW.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/le%20petit%20lunetier.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Specsavers-Logo.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Zenni-Logo.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Eschenbach-Logo.jpg",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/WEBP%20images/Text%20Images%20webp/benedetta-crystal-frames-img-txt.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/WEBP%20images/Text%20Images%20webp/Digital-frames-ok.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/pd-measurement-tool-glasses.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.fittingbox.com/hubfs/WEBP%20images/Online-virtual-try-on-module-reduce2.webp",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://fittingbox.com/hs/hsstatic/HubspotToolsMenu/static-1.640/js/index.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 15413
+ },
+ {
+  "url": "https://static.hsappstatic.net/video-embed/ex/loader.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 47147
+ },
+ {
+  "url": "https://fittingbox.com/hs/hsstatic/content-cwv-embed/static-1.1293/embed.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 13757
+ },
+ {
+  "url": "https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.9.0/ajax-loader.gif",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/gif; charset=utf-8",
+  "bytes": 3208
+ },
+ {
+  "url": "https://js.hsadspixel.net/pixels.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 11501
+ },
+ {
+  "url": "https://js.hs-banner.com/3439223.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "text/javascript; charset=UTF-8",
+  "bytes": 70583
+ },
+ {
+  "url": "https://js.hscollectedforms.net/collectedforms.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 79240
+ },
+ {
+  "url": "https://js.usemessages.com/conversations-embed.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 92594
+ },
+ {
+  "url": "https://fittingbox.com/_hcms/googlefonts/Montserrat/700.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 61024
+ },
+ {
+  "url": "https://js.hs-analytics.net/analytics/1785846600000/3439223.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "text/javascript",
+  "bytes": 109430
+ },
+ {
+  "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUQjIg1_i6t8kCHKm459WxRyS7m.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 39632
+ },
+ {
+  "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 37956
+ },
+ {
+  "url": "https://fittingbox.com/_hcms/googlefonts/Montserrat/regular.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 59444
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/WEBP%20images/Slider%20Banner%20webp/%5BFBx%5Dslider-banner-advanced-1a.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 48342
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Baxter-Blue.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4044
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-afflelou.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 5322
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20Eyerim.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4828
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20JINS.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4402
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Fashion-Eyewear.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 9374
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/ferragamo.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 8146
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/Logo%20Marchon.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4970
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/kits.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 3166
+ },
+ {
+  "url": "https://app.hubspot.com/content-tools-menu/api/v1/tools-menu/has-permission-json?portalId=3439223",
+  "status": 204,
+  "resourceType": "xhr",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.googletagmanager.com/gtag/js?id=G-VE8LPLVX9H",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=UTF-8",
+  "bytes": 188671
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20De%20Rigo-1.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4746
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/hub_generated/template_assets/1/38363049449/1784195874875/template_main.min.js",
+  "status": 200,
+  "resourceType": "other",
+  "contentType": "text/javascript",
+  "bytes": 350157
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo-Pair-Eyewear.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 6726
+ },
+ {
+  "url": "https://forms.hscollectedforms.net/collected-forms/v1/config/json?portalId=3439223&utk=",
+  "status": 200,
+  "resourceType": "xhr",
+  "contentType": "application/json;charset=utf-8",
+  "bytes": 133
+ },
+ {
+  "url": "https://js.hubspot.com/web-interactives-embed.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 99075
+ },
+ {
+  "url": "https://js.hs-banner.com/cookie-banner-public/v1/activity/view",
+  "status": 204,
+  "resourceType": "xhr",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/multiopticas.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 5054
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Logo%20Fielmann.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 5216
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/alensa%20logo.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 6008
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Specsavers-Logo.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 10350
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/670x300%20BW/Logo%20Transitions%20BW.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 5780
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/pd-measurement-tool-glasses.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 46760
+ },
+ {
+  "url": "https://www.googletagmanager.com/gtm.js?id=GTM-M7RGNXS",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=UTF-8",
+  "bytes": 177237
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/le%20petit%20lunetier.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 6732
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Eschenbach-Logo.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 4834
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Lacoste_logo.svg.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 8278
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/WEBP%20images/Text%20Images%20webp/benedetta-crystal-frames-img-txt.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 54952
+ },
+ {
+  "url": "https://snap.licdn.com/li.lms-analytics/insight.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript;charset=utf-8",
+  "bytes": 20578
+ },
+ {
+  "url": "https://www.google-analytics.com/analytics.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "text/javascript",
+  "bytes": 20802
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/WEBP%20images/Online-virtual-try-on-module-reduce2.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 31398
+ },
+ {
+  "url": "https://snap.licdn.com/li.lms-analytics/insight.old.min.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript;charset=utf-8",
+  "bytes": 18894
+ },
+ {
+  "url": "https://cta-service-cms2.hubspot.com/web-interactives/public/v1/embed/combinedConfigs?portalId=3439223&currentUrl=https%3A%2F%2Ffittingbox.com%2F&contentId=167694509217",
+  "status": 200,
+  "resourceType": "fetch",
+  "contentType": "application/json;charset=utf-8",
+  "bytes": 638
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/WEBP%20images/Text%20Images%20webp/Digital-frames-ok.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 43336
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/Website%20revamp%202021/Logo%20Partners/800x300/Zenni-Logo.jpg",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 5686
+ },
+ {
+  "url": "https://www.googletagmanager.com/gtag/js?id=UA-218434410-1&cx=c&gtm=4e67v1",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=UTF-8",
+  "bytes": 124000
+ },
+ {
+  "url": "https://fittingbox.com/_hcms/googlefonts/Montserrat/500.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 59720
+ },
+ {
+  "url": "https://fittingbox.com/hubfs/WEBP%20images%20-%202022/Hero-Femme-try-on-medium-1.webp",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/webp",
+  "bytes": 79414
+ },
+ {
+  "url": "https://perf-na1.hsforms.com/embed/v3/counters.gif?key=config-loaded-success&value=1",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/gif",
+  "bytes": 35
+ },
+ {
+  "url": "https://secure.7-companycompany.com/js/795974.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "text/javascript",
+  "bytes": 16
+ },
+ {
+  "url": "https://fittingbox.com/_hcms/livechat/widget?portalId=3439223&conversations-embed=static-1.27681&mobile=false&messagesUtk=1d95eac9bf7c41a7971c95f6696c6378&traceId=1d95eac9bf7c41a7971c95f6696c6378",
+  "status": 200,
+  "resourceType": "xhr",
+  "contentType": "application/json;charset=utf-8",
+  "bytes": 3573
+ },
+ {
+  "url": "https://www.googletagmanager.com/gtag/js?id=AW-988920357&cx=c&gtm=4e67v1",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=UTF-8",
+  "bytes": 144006
+ },
+ {
+  "url": "https://3439223.hs-sites.com/hs-web-interactive-3439223-200085684633?parentPageUrl=https%3A%2F%2Ffittingbox.com%2F&enableResponsiveStyles=true",
+  "status": 200,
+  "resourceType": "document",
+  "contentType": "text/html;charset=utf-8",
+  "bytes": 23564
+ },
+ {
+  "url": "https://js.hubspot.com/web-interactives-container.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript; charset=utf-8",
+  "bytes": 31021
+ },
+ {
+  "url": "https://3439223.hs-sites.com/hs/hsstatic/cos-i18n/static-1.53/bundles/project.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 1243
+ },
+ {
+  "url": "https://7052064.fs1.hubspotusercontent-na1.net/hubfs/7052064/hub_generated/module_assets/1/-53649664999/1785827936792/module_button_interactive.min.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css; charset=utf-8",
+  "bytes": 145
+ },
+ {
+  "url": "https://3439223.hs-sites.com/hs/hsstatic/content-cwv-embed/static-1.1293/embed.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 13757
+ },
+ {
+  "url": "https://3439223.hs-sites.com/_hcms/googlefonts/Montserrat/700.woff2",
+  "status": 200,
+  "resourceType": "font",
+  "contentType": "font/woff2",
+  "bytes": 61024
+ },
+ {
+  "url": "https://app.hubspot.com/conversations-visitor/3439223/threads/utk/1d95eac9bf7c41a7971c95f6696c6378?uuid=c268b9308a1a48ec92e234c968049681&mobile=false&mobileSafari=false&hideWelcomeMessage=false&hstc=&domain=fittingbox.com&inApp53=false&messagesUtk=1d95eac9bf7c41a7971c95f6696c6378&url=https%3A%2F%2Ffittingbox.com%2F&inline=false&isFullscreen=false&globalCookieOptOut=&isFirstVisitorSession=true&isAttachmentDisabled=false&isInitialInputFocusDisabled=false&enableWidgetCookieBanner=false&isInCMS=true",
+  "status": 200,
+  "resourceType": "document",
+  "contentType": "text/html; charset=utf-8",
+  "bytes": 75440
+ },
+ {
+  "url": "https://static.hsappstatic.net/trellis-theming-assets/static-1.389/stylesheets/hubspot-theme.stable.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 284510
+ },
+ {
+  "url": "https://static.hsappstatic.net/trellis-theming-assets/static-1.389/bundles/hubspot-theme.stable.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 137827
+ },
+ {
+  "url": "https://static.hsappstatic.net/react-dlb/static-1.84/bundle.production.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 145677
+ },
+ {
+  "url": "https://static.hsappstatic.net/head-dlb/static-1.5007/bundle.production.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 59277
+ },
+ {
+  "url": "https://perf-na1.hsforms.com/embed/v3/counters.gif?key=interactive-shown&value=1",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/gif",
+  "bytes": 35
+ },
+ {
+  "url": "https://cta-service-cms2.hubspot.com/web-interactives/public/v1/track/view?webInteractiveContentId=200085684633&webInteractiveId=502243398272&containerType=BANNER&portalId=3439223&audienceId=null&campaignId=49b9b578-7c4d-4812-92c9-62dae1728c7c&pageUrl=https%3A%2F%2Ffittingbox.com%2F&pageTitle=Leading+Eyewear+Virtual+Try-On+Software+%7C+Fittingbox&userAgent=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+HeadlessChrome%2F151.0.7922.34+Safari%2F53",
+  "status": 307,
+  "resourceType": "image",
+  "contentType": "",
+  "bytes": null
+ },
+ {
+  "url": "https://static.hubspot.com/img/trackers/blank001.gif",
+  "status": 301,
+  "resourceType": "image",
+  "contentType": "text/html; charset=UTF-8",
+  "bytes": 167
+ },
+ {
+  "url": "https://static.hsappstatic.net/conversations-visitor-ui/static-1.30178/sass/visitor.css",
+  "status": 200,
+  "resourceType": "stylesheet",
+  "contentType": "text/css",
+  "bytes": 27283
+ },
+ {
+  "url": "https://static.hsappstatic.net/static-hubspot-com/static-1.270519761/img/trackers/blank001.gif",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/gif",
+  "bytes": 43
+ },
+ {
+  "url": "https://static.hsappstatic.net/hubspot-dlb/static-2.1877/bundle.production.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 126020
+ },
+ {
+  "url": "https://static.hsappstatic.net/conversations-visitor-ui/static-1.30188/bundles/visitor.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 1231945
+ },
+ {
+  "url": "https://static.hsappstatic.net/conversations-visitor-ui/static-1.9449/audio/notification.mp3",
+  "status": 206,
+  "resourceType": "media",
+  "contentType": "audio/mpeg",
+  "bytes": 4745
+ },
+ {
+  "url": "https://static.hsappstatic.net/conversations-visitor-ui/static-1.30178/i18n-data-data-modern-locales-en-us.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 829
+ },
+ {
+  "url": "https://static.hsappstatic.net/whisper-core/ex/whisper-core.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 375
+ },
+ {
+  "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-VE8LPLVX9H&gtm=45je67v1v871962310za200zd871962310&_p=1785846758835&gcs=G100&gcd=13p3p3p3p5l1&npa=1&dma_cps=-&dma=0&gdid=dZTQ1Zm&_eu=AAAAAGAC&are=1&cid=1017756119.1785846762&frm=0&pscdl=denied&rcb=3&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253DA%253FBrand%3B99.0.0.0%7CHeadlessChrome%3B151.0.7922.34%7CChromium%3B151.0.7922.34&uam=&uamb=0&uap=Windows&uapv=19.0.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115938466~115938469~118395334~118897920~118897930~11989",
+  "status": 204,
+  "resourceType": "fetch",
+  "contentType": "text/plain",
+  "bytes": 0
+ },
+ {
+  "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-VE8LPLVX9H&gtm=45je67v1v871962310z876347177za200zd871962310&_p=1785846758835&gcs=G100&gcd=13p3p3p3p5l1&npa=1&dma_cps=-&dma=0&gdid=dZTQ1Zm&_eu=AAACAGAC&are=1&cid=1017756119.1785846762&frm=0&pscdl=denied&rcb=3&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253DA%253FBrand%3B99.0.0.0%7CHeadlessChrome%3B151.0.7922.34%7CChromium%3B151.0.7922.34&uam=&uamb=0&uap=Windows&uapv=19.0.0&uaw=0&ul=en-us&gaf=2&_s=2&tag_exp=115938466~115938469~118395334~118897920~11889",
+  "status": 204,
+  "resourceType": "fetch",
+  "contentType": "text/plain",
+  "bytes": 0
+ },
+ {
+  "url": "https://pagead2.googlesyndication.com/ccm/collect?rcb=2&frm=0&ae=g&en=page_view&dl=https%3A%2F%2Ffittingbox.com%2F&scrsrc=www.googletagmanager.com&rnd=217287458.1785846762&navt=n&npa=1&ep.ads_data_redaction=0&gdid=dZTQ1Zm&gtm=45He67v1v76347177za200zd76347177xea&gcs=G100&gcd=13p3p3p3p5l1&dma_cps=-&dma=0&tag_exp=115938466~115938469~118897920~118897930~119896803&apvc=0&tft=1785846761821&tfd=6207&fmt=8",
+  "status": 200,
+  "resourceType": "fetch",
+  "contentType": "",
+  "bytes": null
+ },
+ {
+  "url": "https://pagead2.googlesyndication.com/ccm/collect?rcb=3&frm=0&en=page_view&dl=https%3A%2F%2Ffittingbox.com%2F&scrsrc=www.googletagmanager.com&rnd=217287458.1785846762&navt=n&npa=1&did=dZTQ1Zm&gdid=dZTQ1Zm&gtm=45je67v1v871962310za200zd871962310xec&gcs=G100&gcd=13p3p3p3p5l1&dma_cps=-&dma=0&tag_exp=115938466~115938469~118395334~118897920~118897930~119896803~120125304&apvc=1&tids=AW-988920357&tid=AW-988920357&tft=1785846761820&tfd=6206&fmt=8",
+  "status": 200,
+  "resourceType": "fetch",
+  "contentType": "",
+  "bytes": null
+ },
+ {
+  "url": "https://static.hsappstatic.net/whisper-core/static-1.10009/whisper-core-entry.js",
+  "status": 200,
+  "resourceType": "script",
+  "contentType": "application/javascript",
+  "bytes": 114791
+ },
+ {
+  "url": "https://pagead2.googlesyndication.com/ccm/collect?rcb=3&frm=0&ae=g&dl=https%3A%2F%2Ffittingbox.com%2F&scrsrc=www.googletagmanager.com&rnd=217287458.1785846762&navt=n&npa=1&did=dZTQ1Zm&gdid=dZTQ1Zm&gtm=45je67v1v871962310z876347177za200zd871962310xea&gcs=G100&gcd=13p3p3p3p5l1&dma_cps=-&dma=0&tag_exp=115938466~115938469~118395334~118897920~118897930~119896803~120125304&apvc=0&tids=AW-988920357&tid=AW-988920357&tft=1785846761821&tfd=6207&fmt=8",
+  "status": 200,
+  "resourceType": "fetch",
+  "contentType": "",
+  "bytes": null
+ },
+ {
+  "url": "https://pagead2.googlesyndication.com/ccm/collect?rcb=3&frm=0&en=page_view&dl=https%3A%2F%2Ffittingbox.com%2F&scrsrc=www.googletagmanager.com&rnd=217287458.1785846762&navt=n&npa=1&ep.debug_mode=true&did=dZTQ1Zm&gdid=dZTQ1Zm&gtm=45je67v1v871962310z876347177za200zd871962310xec&gcs=G100&gcd=13p3p3p3p5l1&dma_cps=-&dma=0&tag_exp=115938466~115938469~118395334~118897920~118897930~119896803~120125304&apvc=0&tids=AW-988920357&tid=AW-988920357&tft=1785846761821&tfd=6207&fmt=8",
+  "status": 200,
+  "resourceType": "fetch",
+  "contentType": "",
+  "bytes": null
+ },
+ {
+  "url": "https://exceptions.hubspot.com/frontend/observability/page-tracking/store/?sentry_version=7&sentry_client=raven-js%2F3.19.1&deployable=conversations-visitor-ui",
+  "status": 200,
+  "resourceType": "xhr",
+  "contentType": "text/plain; charset=utf-8",
+  "bytes": 0
+ },
+ {
+  "url": "https://app.hubspot.com/api/cartographer/v1/rhumb?hs_static_app=conversations-visitor-ui&hs_static_app_version=1.30188",
+  "status": 204,
+  "resourceType": "ping",
+  "contentType": "",
+  "bytes": 0
+ },
+ {
+  "url": "https://track.hubspot.com/__ptq.gif?k=1&sd=1280x720&cd=24-bit&cs=UTF-8&ln=en-us&v=1.1&a=3439223&pi=167694509217&ct=standard-page&ccu=https%3A%2F%2Ffittingbox.com&cpi=167694509217&lpi=167694509217&abi=84643714391&lvi=167694509217&lvc=en&pu=https%3A%2F%2Ffittingbox.com%2F&t=Leading+Eyewear+Virtual+Try-On+Software+%7C+Fittingbox&cts=1785846761982&vi=93fd91435f8aee7ad1bad8ab23085660&nc=true&ce=false&pt=3&cc=0",
+  "status": 200,
+  "resourceType": "image",
+  "contentType": "image/gif",
+  "bytes": 45
+ },
+ {
+  "url": "https://app.hubspot.com/api/livechat-public/v1/bots/public/bot/3849473/welcomeMessages?hs_static_app=conversations-visitor-ui&hs_static_app_version=1.30188&conversations-visitor-ui=static-1.30188&traceId=1d95eac9bf7c41a7971c95f6696c6378&sessionId=AMOaWbL9PitvLQRvfSmAnHumr2v-pNX-NIVrnQzmZo6SmQnTBp9lLPFTuEhHACDTYhkNeOusbgO9LInAZBKQXTgQkbSVXMsIAGOCD7sUkaASVe2tIcpb0Twf-erxh1ueijXlTUwFPinEIwESPNra9DbMhWSUGVhvmEZdCRHwmL4uewAjImbsYpA",
+  "status": 200,
+  "resourceType": "xhr",
+  "contentType": "application/json;charset=utf-8",
+  "bytes": 568
+ }
+]
