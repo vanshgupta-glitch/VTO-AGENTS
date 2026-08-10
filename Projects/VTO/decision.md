@@ -457,6 +457,198 @@ Two distinct instruments with distinct prompts. Never merge them into one review
 
 ---
 
+D-021
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Architecture
+
+STATEMENT:
+The roster is five agents — Claude, Admin, Critic, Researcher, Coder — plus two executor runtimes; a role becomes an agent only if, on its failure path, it interprets an open-ended situation, chooses between materially different actions, and holds context no adjacent role has.
+
+REASON:
+Nine of twelve proposed agents were pipeline stages rather than deciders. An LLM producing deterministic output is pure cost and pure variance, and each agent is a prompt, an identity, and a drift surface.
+
+EVIDENCE:
+Two independent tests — a five-level authority scale and an invocation-topology test — reached the same classification from different evidence. Four roles scored A0–A1; the two judgments buried inside them relocated to roles with better context.
+
+IMPACT:
+See [[ADR-001-agent-boundaries]] and [[ADR-006-agent-granularity]]. Every roster change must name the promotion clause it satisfies. Soft ceiling of seven; the eighth proposal re-tests the whole roster. Demotion keeps the Slack persona — presentation and agency are separable.
+
+---
+
+D-022
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Architecture
+
+STATEMENT:
+Reuse is modelled as three distinct units — operations (deterministic code), skills (versioned procedures loaded on demand), knowledge packs (durable facts) — and agent prompts are composed from them, generated and hash-verified.
+
+REASON:
+One monolithic prompt per agent has no sharing and no versioning. Five agents across three codebases is fifteen divergent prompts on the only surface with no schema to validate it.
+
+EVIDENCE:
+The operator names skills as the sole mechanism by which codebase-specific knowledge persists in agents, but keeps them in the runtime where they cannot be diffed, tested, or rolled back.
+
+IMPACT:
+See [[ADR-002-skills-architecture]]. Agents receive a skill *index*, never skill bodies. Skills carry golden tests. A skill change surfaces as N hash changes so blast radius is visible before it lands.
+
+---
+
+D-023
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Architecture
+
+STATEMENT:
+Codebase is a first-class scope present from the first line of code; one codebase is the degenerate case of many.
+
+REASON:
+The seam runs through configuration, context assembly and eight tables. Retrofitting hits all three at once, with live data already in the wrong shape.
+
+EVIDENCE:
+Schema columns were already plural while configuration and the context assembler were singular — a half-built seam that would have failed on the second codebase.
+
+IMPACT:
+See [[ADR-003-multi-codebase]]. Scope columns are non-null. Only the strategist may read across codebases. A cross-codebase solution match is offered as evidence, never applied — a fix that worked in one repository can be actively wrong in another.
+
+---
+
+D-024
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Architecture
+
+STATEMENT:
+The pipeline is a declared workflow artifact, and it includes a NARRATIVE stage between analysis and planning.
+
+REASON:
+Sequencing was emergent from per-stage agents; removing four of them left nothing carrying the sequence. Separately, priority ordering across several gaps has nothing to appeal to without a narrative.
+
+EVIDENCE:
+The original topology had no feedback edges at all — failure routing existed only implicitly in dispatcher code.
+
+IMPACT:
+See [[ADR-004-workflow-engine]]. Failure routing is declared per stage. "Nothing here is worth doing" is a valid, reportable outcome — otherwise the strategist manufactures work.
+
+---
+
+D-025
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Process
+
+STATEMENT:
+Critique is scoped by leverage rather than discipline; work orders are reviewed and blocked, not only coding tasks.
+
+REASON:
+A wrong coding plan wastes one task. A wrong work order wastes an entire loop — decomposition, critique, implementation, testing, scoring — in service of the wrong objective.
+
+EVIDENCE:
+The gate was scoped by an agent flag on Coder, leaving the highest-leverage artifact in the system reviewed by nothing, including after a Claude re-plan on escalation.
+
+IMPACT:
+See [[ADR-005-critique-symmetry]]. Work-order critique asks four different questions from the coding checklist. Revise rate below 15% means rubber-stamping; above 60% the upstream artifact is the problem, not the critique.
+
+---
+
+D-026
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Constraint
+
+STATEMENT:
+Executors receive their codebase's definitions and agent rules, not only task thread history.
+
+REASON:
+The role most needing the codebase model was the only one not given it.
+
+EVIDENCE:
+Tier 3 context was specified as full thread history. The operator's agent-rules document exists specifically to send coding agents to the definitions continuously.
+
+IMPACT:
+Tier 3 assembly loads that codebase's agent rules and definitions alongside the thread. Corrects an omission in the v3.0 context policy.
+
+---
+
+D-027
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Recovery
+
+STATEMENT:
+Stored solutions are invalidated when enrichment detects structural change to the code they reference.
+
+REASON:
+A directive keyed on a problem theme stays valid forever, but a refactor can make it actively wrong; the reuse success rate only degrades after it has already failed several times.
+
+EVIDENCE:
+Solutions are keyed on theme and codebase with no dependency on code structure, so nothing connects a refactor to the advice that assumed the old structure.
+
+IMPACT:
+Enrichment records which modules changed; solutions referencing them are flagged stale and re-diagnosed on next hit rather than served. Prevents the store from confidently teaching an obsolete fix.
+
+---
+
+D-028
+
+STATUS: ACTIVE
+
+DATE:
+2026-08-08
+
+TYPE:
+Constraint
+
+STATEMENT:
+Agent-driven staged and canary deployment to production was considered and deferred; only deployment to a development store is in scope.
+
+REASON:
+Recorded so a future session does not re-derive the question. The operator runs CI/CD, canary and production push through agents successfully, so this is a scope choice rather than a judgment that it cannot work.
+
+EVIDENCE:
+Production deployment sits downstream of the human commit gate, and that gate is permanent per D-008. Automating past it would require relaxing the accountability rule.
+
+IMPACT:
+Revisit only after the loop has demonstrably run unattended. Any proposal must state how it preserves single-human ownership of the live state.
+
+---
+
 D-019
 
 STATUS: SUPERSEDED

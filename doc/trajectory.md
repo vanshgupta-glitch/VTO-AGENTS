@@ -47,6 +47,9 @@ Build-sequence step numbers below refer to [[TECHNICAL-ARCHITECTURE]] §9. One n
 
 Newest first.
 
+**2026-08-08 — Architecture review: roster cut from twelve agents to five.**
+Applied two independent tests — a five-level decision-authority scale and an invocation-topology test — to every proposed role. They agreed. Scout, Scaffolder, TestRunner, VideoTester and Accuracy held A0–A1 authority and became skills, tools and services; their Slack personas survive without agents behind them. Six ADRs written: agent boundaries, skills architecture, multi-codebase scoping, declared workflows, critique symmetry, granularity governance. Four hidden flaws closed along the way — the work order was reviewed by nothing, executors never received the definitions, solutions never invalidated on refactor, and the pipeline had no feedback edges at all. **Learned: pipeline stages were being mistaken for agents. A stage is a step in a sequence; an agent is a thing that decides.** Cost: one session. PRD and TECHNICAL-ARCHITECTURE now lag the ADRs — see OPEN-007.
+
 **2026-08-08 — Progressive documents seeded.**
 Wrote the specification for `llm.md` / `CLAUDE.md` / `trajectory.md`, including the division-of-content rule and the ENRICH verification pass. Seeded this document from a draft that mixed status with restated decisions and architecture; both were removed in favour of links, and a history section was added — the operator's `trajectory.md` is defined by history, and the draft had none. Cost: one session. Learned: the drift risk in this document set is duplication, not omission.
 
@@ -87,8 +90,8 @@ Priority 3 outranks 4 because specification is the constraint on building, not p
 | OPEN-002 | Slack workspace and 12 apps not provisioned | Human | Step 10 onward |
 | OPEN-003 | FittingBox reference frames not captured | Human | Accuracy terms, Phase 2 exit |
 | OPEN-004 | No stopping rule for strategist gap-finding | Strategist | No — but unbounded work generation without it |
-| OPEN-005 | `PROTOCOL.md`, `OPERATIONS.md`, `AGENT-SPECS.md` unwritten | Engineering | Steps 1, 6, 11 |
-| OPEN-006 | `fully-kitted.md` standard unwritten | Engineering | Critic cannot check against it |
+| OPEN-005 | `PROTOCOL.md`, `OPERATIONS.md`, `AGENT-SPECS.md` unwritten — now five agents, not twelve | Engineering | Steps 1, 6, 11 |
+| OPEN-007 | PRD and TECHNICAL-ARCHITECTURE lag ADR-001..006; where they conflict the ADR wins | Engineering | No — but the divergence is exactly the failure DRIFT-AND-CONSISTENCY warns about, so it should not sit long |
 
 Index only. Issue documents live in `docs/issues/` once the swarm repo exists.
 

@@ -63,6 +63,43 @@ The pass/fail form. Any `NO` without a stated reason is a `REVISE`.
 
 ---
 
+## Agent definitions
+
+The standard applies to **the agents themselves**, not only to the code they write. An agent definition that omits its failure behaviour produces exactly the unknown states this document exists to prevent — one level up, where they are harder to see.
+
+Every `agent.yaml` must declare, explicitly and non-empty:
+
+14. **Its authority level** (A2–A4) and which promotion-test clause it satisfies ([[ADR-006-agent-granularity]]). An agent that cannot name its clause should not exist.
+15. **Its escalation target.** Where it goes when it cannot resolve. `null` is only valid for the strategist.
+16. **Its attempt cap**, per theme.
+17. **Its allowed operations.** An empty list means the agent performs no external action — state that deliberately rather than by omission.
+18. **Its declared skills and knowledge packs**, version-pinned.
+19. **Its context policy**, derived from tier and never overridden ad hoc.
+20. **Its report contract** — what it emits on success, on failure, and on escalation.
+
+And in its persona:
+
+21. **What it must refuse.** A role with no stated boundary will eventually do a neighbour's job badly.
+22. **What "stuck" means for this discipline**, concretely. A generic stuck definition produces generic, undiagnosable declarations.
+
+### Agent-definition checklist
+
+```
+[ ] Authority level declared, with the promotion clause it satisfies
+[ ] Escalation target set (null only for the strategist)
+[ ] Attempt cap set
+[ ] allowed_operations explicit — empty list is a valid, deliberate answer
+[ ] Skills and knowledge version-pinned
+[ ] Context policy matches tier
+[ ] Report contract covers success, failure and escalation
+[ ] Persona states what this agent refuses
+[ ] Persona defines "stuck" for this discipline concretely
+```
+
+Checked at registry load. A definition failing any line **blocks startup** rather than degrading — a half-specified agent is the config-divergence failure with a personality.
+
+---
+
 ## What this is not
 
 Not a style guide, and not a demand for exhaustive defensive coding. Defensive code that swallows problems is *worse* than code that fails loudly — it converts a visible failure into an invisible one. The standard asks for one thing: **when this breaks, will someone be able to tell, and will they be able to tell why?**
