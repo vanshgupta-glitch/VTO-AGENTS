@@ -1,0 +1,11 @@
+name: patent-teardown
+version: 1.0.0
+scope: vto
+when_to_use: >
+  Inferring backend behaviour from patent claims combined with observed API traffic.
+applies_to: [vto-widget]
+requires: [web.fetch, web.har, documents.read]
+provides: vto.patent_teardown
+owner_agents: [researcher]
+knowledge: [swarm-protocol@^1, vto-domain@^1, competitor-landscape@^1]
+overrides: null

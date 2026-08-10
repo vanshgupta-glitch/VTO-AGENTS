@@ -1,0 +1,32 @@
+# Global swarm configuration. Validated at boot; the process refuses to start on error.
+control:
+  target_accuracy: 0.98
+  max_attempts_per_theme: 2
+  max_loops_per_work_order: 10
+  daily_cost_cap_usd: 50
+  report_max_chars: 2000
+  human_gate_channel: swarm-human-gate
+  never_run: ["git commit", "git push", "git merge", "git rebase", "git reset --hard"]
+  allow_raw_shell: false
+  tier1_allow_message_history: false   # MUST stay false — present so a violation is auditable
+
+concurrency:
+  max_concurrent_runs: 3
+  run_timeout_seconds: 900
+  heartbeat_interval_seconds: 60
+  stale_lock_seconds: 1800
+  watchdog_interval_seconds: 60
+
+documents:
+  enrich_every_n_loops: 1
+  staleness_warn_loops: 3
+  verify_claims_per_pass: 5
+
+recovery:
+  solutions_min_success_rate: 0.5
+  circularity_repeat_threshold: 3
+  circularity_churn_threshold: 3
+
+critique:
+  revise_rate_floor: 0.15      # below: rubber-stamping
+  revise_rate_ceiling: 0.60    # above: the upstream artifact is the problem

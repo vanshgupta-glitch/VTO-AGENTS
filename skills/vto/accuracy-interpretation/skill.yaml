@@ -1,0 +1,11 @@
+name: accuracy-interpretation
+version: 1.0.0
+scope: vto
+when_to_use: >
+  Explaining what a composite accuracy score means given which terms were active.
+applies_to: [vto-widget]
+requires: [accuracy.read]
+provides: vto.accuracy_interpret
+owner_agents: [claude]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+overrides: null

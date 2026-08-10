@@ -1,0 +1,27 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: admin
+display_name: VTO Admin
+tier: 2
+authority: A3+A4
+promotion_clause: >
+  Decomposition is generative. Holds live queue state, which D-002 forbids the strategist from holding.
+
+runtime: hermes
+model: openrouter/deepseek/deepseek-v4-pro
+token_env: SLACK_BOT_ADMIN
+primary_channel: swarm-admin
+
+context_policy: discipline
+codebase: required
+soul: soul/admin.md
+
+capabilities: [decompose.workorder, route.capability, sequence.dependencies, report.compile]
+allowed_operations: [documents.read, documents.write, queue.read]
+skills: [decomposition@^1, stuck-diagnosis@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+
+executor: null
+recovery: { max_attempts: 2, escalates_to: claude, consult_solutions: true }
+requires_precode_critique: false
+reports: { on_success: claude, on_escalation: claude }
+enabled: true

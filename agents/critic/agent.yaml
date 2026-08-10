@@ -1,0 +1,27 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: critic
+display_name: VTO Critic
+tier: 2
+authority: A3
+promotion_clause: >
+  Generates alternatives that did not exist. Cannot fold into the author: a reviewer sharing identity inherits its framing.
+
+runtime: hermes
+model: openrouter/deepseek/deepseek-v4-flash
+token_env: SLACK_BOT_CRITIC
+primary_channel: swarm-critique
+
+context_policy: discipline
+codebase: required
+soul: soul/critic.md
+
+capabilities: [critique.workorder, critique.plan]
+allowed_operations: [documents.read, repo.diff, solutions.find]
+skills: [constructive-critique@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1, shopify-conventions@^1]
+
+executor: null
+recovery: { max_attempts: 1, escalates_to: admin, consult_solutions: true }
+requires_precode_critique: false
+reports: { on_success: admin }
+enabled: true

@@ -1,0 +1,15 @@
+slug: vto-widget
+display_name: VTO Widget
+# WARNING: canonical repository identity is UNRESOLVED — see decision D-017.
+# The task log names commits absent from this copy. Verify before any agent writes here.
+repo_path: C:/Users/vansh.gupta/OneDrive - NEW MEDIA GURU INDIA PVT LTD/rkumar_vto
+default_branch: main
+docs_path: docs
+lineage_verified: false
+
+knowledge: [vto-domain, shopify-conventions]
+skill_scopes: [_shared, vto, shopify]
+operations: [build.widget, test.suite, test.types, lint, video.run, accuracy.score,
+             repo.diff, repo.pr, repo.write, deploy.dev]
+model_overrides: {}
+active: true

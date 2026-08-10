@@ -1,0 +1,27 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: claude
+display_name: VTO Claude
+tier: 1
+authority: A4
+promotion_clause: >
+  Sole holder of strategic context; the only role that can change what the system pursues. A4 is definitionally singular.
+
+runtime: claude
+model: claude-opus-4-8
+token_env: SLACK_BOT_CLAUDE
+primary_channel: swarm-analysis
+
+context_policy: documents-only
+codebase: any
+soul: soul/claude.md
+
+capabilities: [analyse.codebase, plan.workorder, enrich.documents, interpret.verification]
+allowed_operations: [documents.read, documents.write, repo.diff, repo.issues, repo.prs, repo.changes_since]
+skills: [vto/visual-diff@^1, vto/accuracy-interpretation@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1, competitor-landscape@^1]
+
+executor: null
+recovery: { max_attempts: 0, escalates_to: null, consult_solutions: true }
+requires_precode_critique: false
+reports: { on_success: human, on_escalation: human }
+enabled: true

@@ -1,0 +1,27 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: coder
+display_name: VTO Coder
+tier: 2
+authority: A3+A2
+promotion_clause: >
+  Generates implementations and stuck diagnoses. Holds the diff and the intent, which is why test triage lives here.
+
+runtime: hermes
+model: openrouter/deepseek/deepseek-v4-flash
+token_env: SLACK_BOT_CODER
+primary_channel: swarm-code
+
+context_policy: discipline
+codebase: required
+soul: soul/coder.md
+
+capabilities: [code.implement, code.refactor, code.debug, code.scaffold, test.triage]
+allowed_operations: [repo.diff, repo.pr, repo.write, test.suite, test.types, lint, build.widget]
+skills: [stuck-diagnosis@^1, shopify/project-scaffold@^1, shopify/theme-extension@^1, vto/visual-diff@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1, shopify-conventions@^1]
+
+executor: { agent: openclaw, max_concurrent: 2, timeout_seconds: 900 }
+recovery: { max_attempts: 2, escalates_to: admin, consult_solutions: true }
+requires_precode_critique: true
+reports: { on_success: admin, on_escalation: admin }
+enabled: true

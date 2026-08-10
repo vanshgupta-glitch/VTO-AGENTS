@@ -1,0 +1,23 @@
+# Command templates. NEVER invent flags — confirm with --help and record here.
+# Absolute paths only: the name on PATH may be a shim (decision D-015).
+runtimes:
+  hermes:
+    bin: C:/Users/vansh.gupta/AppData/Local/hermes/hermes-agent/venv/Scripts/hermes
+    expected_version: "0.18.0"
+    cmd_template: ["-p", "{profile}", "--prompt-file", "{instruction_file}"]
+  openclaw:
+    bin: C:/Users/vansh.gupta/AppData/Roaming/npm/openclaw
+    expected_version: "2026.7.1-2"
+    cmd_template: ["--agent", "{agent}", "--prompt-file", "{instruction_file}"]
+  opencode:
+    bin: C:/Users/vansh.gupta/AppData/Roaming/npm/opencode
+    expected_version: "1.18.15"
+    cmd_template: ["run", "{message}", "-m", "{model}"]
+    strip_ansi: true
+  claude:
+    bin: C:/Users/vansh.gupta/AppData/Roaming/npm/claude
+    expected_version: "2.1.226"
+    cmd_template: ["-p", "{instruction}", "--model", "{model}"]
+  python:
+    bin: C:/Users/vansh.gupta/AppData/Local/Programs/Python/Python311/python.exe
+    expected_version: "3.11"

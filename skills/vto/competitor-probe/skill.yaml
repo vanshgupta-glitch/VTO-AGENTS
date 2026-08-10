@@ -1,0 +1,11 @@
+name: competitor-probe
+version: 1.0.0
+scope: vto
+when_to_use: >
+  Instrumenting a competitor demo to capture request/response and bundle behaviour.
+applies_to: [vto-widget]
+requires: [web.render, web.har, web.screenshot]
+provides: vto.competitor_probe
+owner_agents: [researcher]
+knowledge: [swarm-protocol@^1, vto-domain@^1, competitor-landscape@^1]
+overrides: null

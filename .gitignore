@@ -2,3 +2,8 @@
 **/.obsidian/workspace-mobile.json
 .trash/
 ORCHESTRATION-ARCHIVE.md
+
+# never commit rendered secrets or local state
+.env
+*.secrets.env
+data/

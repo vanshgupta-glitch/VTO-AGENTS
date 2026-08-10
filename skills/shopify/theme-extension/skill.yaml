@@ -1,0 +1,11 @@
+name: theme-extension
+version: 1.0.0
+scope: shopify
+when_to_use: >
+  Changing anything inside a theme app extension — blocks, snippets, settings or assets.
+applies_to: [vto-widget]
+requires: [repo.write, repo.diff, build.widget]
+provides: shopify.theme_ext
+owner_agents: [coder]
+knowledge: [swarm-protocol@^1, shopify-conventions@^1]
+overrides: null

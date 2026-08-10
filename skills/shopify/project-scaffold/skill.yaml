@@ -1,0 +1,11 @@
+name: project-scaffold
+version: 1.0.0
+scope: shopify
+when_to_use: >
+  Generating a skeleton or boilerplate that must match this platform's conventions.
+applies_to: [vto-widget]
+requires: [repo.write, build.widget]
+provides: shopify.scaffold
+owner_agents: [coder]
+knowledge: [swarm-protocol@^1, shopify-conventions@^1]
+overrides: null

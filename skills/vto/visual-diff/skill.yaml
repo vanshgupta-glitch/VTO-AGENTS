@@ -1,0 +1,11 @@
+name: visual-diff
+version: 1.0.0
+scope: vto
+when_to_use: >
+  Reading per-clip video output into structured observations about placement, occlusion and stability.
+applies_to: [vto-widget]
+requires: [video.frames, image.compare]
+provides: vto.visual_diff
+owner_agents: [claude, coder]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+overrides: null

@@ -1,0 +1,27 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: researcher
+display_name: VTO Researcher
+tier: 2
+authority: A3+A2
+promotion_clause: >
+  Generates research strategy from contradictory evidence; knows why it is fetching, which the fetch layer does not.
+
+runtime: hermes
+model: openrouter/deepseek/deepseek-v4-pro
+token_env: SLACK_BOT_RESEARCH
+primary_channel: swarm-research
+
+context_policy: discipline
+codebase: required
+soul: soul/researcher.md
+
+capabilities: [research.patent, research.competitor, research.api, research.literature]
+allowed_operations: [web.fetch, web.render, web.screenshot, web.har, documents.read, documents.write]
+skills: [web-harvest@^2, refutation@^1, vto/patent-teardown@^1, vto/competitor-probe@^1, stuck-diagnosis@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1, competitor-landscape@^1]
+
+executor: { agent: opencode, max_concurrent: 2, timeout_seconds: 900 }
+recovery: { max_attempts: 2, escalates_to: admin, consult_solutions: true }
+requires_precode_critique: false
+reports: { on_success: admin, on_verification: claude }
+enabled: true
