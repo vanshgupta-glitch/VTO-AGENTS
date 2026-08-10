@@ -1,0 +1,11 @@
+name: report-writing
+version: 1.0.0
+scope: _shared
+when_to_use: >
+  Sending anything upward — the reader cannot see what you saw and has a hard character budget.
+applies_to: ["*"]
+requires: []
+provides: report.synthesise
+owner_agents: [admin, coder, researcher, critic]
+knowledge: [swarm-protocol@^1]
+overrides: null

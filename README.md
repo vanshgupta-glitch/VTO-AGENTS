@@ -15,6 +15,9 @@ This repo holds the design. The implementation is built fresh in a separate repo
 | [TECHNICAL-ARCHITECTURE.md](doc/TECHNICAL-ARCHITECTURE.md) | Technical architecture v3.0 — tech stack with reasoning, full folder structure, 20-table database schema explained in plain English, environment variables, configuration gotchas, and the build sequence |
 | **[ADR/](doc/ADR/)** | **Architecture Decision Records** — six ADRs covering agent boundaries (12→5), skills architecture, multi-codebase scoping, declared workflows, critique symmetry, and granularity governance. Where these conflict with the PRD or architecture doc, **the ADR wins** |
 | **[soul/](soul/)** | **The agent identities** — one file per agent, authoritative. Who each one is, what it refuses, what "stuck" means for its discipline, and the rule it is most likely to break |
+| **[knowledge/](knowledge/)** | **Knowledge packs** — durable facts loaded in full. `swarm-protocol` defines every message and artifact contract and is loaded by every agent |
+| **[skills/](skills/)** | **Versioned procedures** — `skill.yaml` + `SKILL.md` + golden tests. Six `_shared` bodies written; nine domain skills catalogued |
+| **[personas/](personas/)** | Slack identities backed by operations, with no LLM behind them |
 | [AGENT-SPECS.md](doc/AGENT-SPECS.md) | Machine-readable `agent.yaml` for the five agents, the two executor runtimes, and the four Slack personas with no agent behind them. Identity prose lives in `soul/` |
 | [SKILLS.md](doc/SKILLS.md) | Skill schema, invocation, resolution order, testing, and the initial catalogue across `_shared`, `vto` and `shopify` scopes |
 | [WORKFLOWS.md](doc/WORKFLOWS.md) | Stage grammar and the four declared pipelines — improvement, recovery, enrich, research — with explicit failure routing |

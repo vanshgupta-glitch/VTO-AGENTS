@@ -1,0 +1,8 @@
+# Slack identity with NO agent behind it — no LLM, no prompt, no model.
+# Presentation and agency are separable (ADR-001).
+id: videotester
+display_name: VTO VideoTester
+token_env: SLACK_BOT_VIDEO
+channel: swarm-video
+backed_by: operation:video.run + skill:vto/visual-diff
+authority: A0

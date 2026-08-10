@@ -1,0 +1,11 @@
+name: stuck-diagnosis
+version: 1.0.0
+scope: _shared
+when_to_use: >
+  An executor has declared STUCK or the system detected circling, and no stored solution matched.
+applies_to: ["*"]
+requires: [solutions.find, repo.diff, documents.read]
+provides: recovery.diagnose
+owner_agents: [admin, coder, researcher, critic]
+knowledge: [swarm-protocol@^1]
+overrides: null

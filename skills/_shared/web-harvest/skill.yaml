@@ -1,0 +1,11 @@
+name: web-harvest
+version: 2.1.0
+scope: _shared
+when_to_use: >
+  Fetching page content when a plain request may be blocked, rendered, or paginated.
+applies_to: ["*"]
+requires: [web.fetch, web.render, web.screenshot]
+provides: web.harvest
+owner_agents: [researcher]
+knowledge: [swarm-protocol@^1]
+overrides: null

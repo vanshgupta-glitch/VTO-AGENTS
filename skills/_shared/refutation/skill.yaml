@@ -1,0 +1,11 @@
+name: refutation
+version: 1.0.0
+scope: _shared
+when_to_use: >
+  Verifying a stated research claim against its cited evidence, after the fact. Never on a plan.
+applies_to: ["*"]
+requires: [web.fetch, documents.read]
+provides: review.refute
+owner_agents: [researcher]
+knowledge: [swarm-protocol@^1]
+overrides: null

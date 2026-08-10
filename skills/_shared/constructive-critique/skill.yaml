@@ -1,0 +1,11 @@
+name: constructive-critique
+version: 1.0.0
+scope: _shared
+when_to_use: >
+  Reviewing a work order or a coding plan before anyone acts on it.
+applies_to: ["*"]
+requires: [documents.read, repo.diff, solutions.find]
+provides: review.constructive
+owner_agents: [critic]
+knowledge: [swarm-protocol@^1]
+overrides: null

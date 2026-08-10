@@ -1,0 +1,11 @@
+name: decomposition
+version: 1.0.0
+scope: _shared
+when_to_use: >
+  Turning one work order into ordered, routed, checkable issue documents.
+applies_to: ["*"]
+requires: [documents.write, documents.read, queue.read]
+provides: plan.decompose
+owner_agents: [admin]
+knowledge: [swarm-protocol@^1]
+overrides: null

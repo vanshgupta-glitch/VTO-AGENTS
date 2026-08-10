@@ -1,0 +1,8 @@
+# Slack identity with NO agent behind it — no LLM, no prompt, no model.
+# Presentation and agency are separable (ADR-001).
+id: scout
+display_name: VTO Scout
+token_env: SLACK_BOT_SCOUT
+channel: swarm-scout
+backed_by: skill:_shared/web-harvest
+authority: A0

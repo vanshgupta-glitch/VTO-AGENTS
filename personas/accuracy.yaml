@@ -1,0 +1,8 @@
+# Slack identity with NO agent behind it — no LLM, no prompt, no model.
+# Presentation and agency are separable (ADR-001).
+id: accuracy
+display_name: VTO Accuracy
+token_env: SLACK_BOT_ACCURACY
+channel: swarm-accuracy
+backed_by: operation:accuracy.score
+authority: A0

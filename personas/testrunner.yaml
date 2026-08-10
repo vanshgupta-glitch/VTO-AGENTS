@@ -1,0 +1,8 @@
+# Slack identity with NO agent behind it — no LLM, no prompt, no model.
+# Presentation and agency are separable (ADR-001).
+id: testrunner
+display_name: VTO TestRunner
+token_env: SLACK_BOT_TEST
+channel: swarm-tests
+backed_by: operation:test.suite
+authority: A0
