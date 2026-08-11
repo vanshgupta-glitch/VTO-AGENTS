@@ -7,7 +7,7 @@ promotion_clause: >
   Generates research strategy from contradictory evidence; knows why it is fetching, which the fetch layer does not.
 
 runtime: hermes
-model: openrouter/deepseek/deepseek-v4-pro
+model: openrouter/deepseek/deepseek-v4-flash
 token_env: SLACK_BOT_RESEARCH
 primary_channel: swarm-research
 

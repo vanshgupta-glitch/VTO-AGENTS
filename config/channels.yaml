@@ -4,64 +4,64 @@ channels:
     topic: "Human to strategist. Goals in, digest out."
     private: false
     members: ['claude', 'admin']
-    id: null
+    id: C0BP7106UF4
   - name: swarm-analysis
     topic: "Analysis, narrative, work orders."
     private: false
     members: ['claude', 'admin']
-    id: null
+    id: C0BP3GJCDK7
   - name: swarm-docs
     topic: "Progressive document changes; ENRICH output."
     private: false
     members: ['claude']
-    id: null
+    id: C0BP710NS4S
   - name: swarm-admin
     topic: "Decomposition, queue, routing."
     private: false
     members: ['admin', 'claude', 'critic']
-    id: null
+    id: C0BQ1BH7BUY
   - name: swarm-critique
     topic: "Pre-code and pre-plan review."
     private: false
     members: ['critic', 'admin']
-    id: null
+    id: C0BP0PNNYM9
   - name: swarm-scout
     topic: "Fetch and scrape results."
     private: false
-    members: ['scout', 'researcher']
-    id: null
+    members: ['scout', 'researcher', 'opencode']
+    id: C0BPAMT0ULC
   - name: swarm-research
     topic: "Patent, competitor, API findings."
     private: false
-    members: ['researcher', 'admin', 'claude']
-    id: null
+    members: ['researcher', 'admin', 'claude', 'opencode']
+    id: C0BP0PNDYSF
   - name: swarm-code
     topic: "Pull requests and diffs."
     private: false
     members: ['coder', 'admin', 'critic']
-    id: null
+    id: C0BP8UYBVB3
   - name: swarm-tests
     topic: "Type, lint, unit and build results."
     private: false
     members: ['testrunner', 'coder', 'admin']
-    id: null
+    id: C0BP711BQ6N
   - name: swarm-video
     topic: "Per-clip try-on verdicts."
     private: false
     members: ['videotester', 'claude']
-    id: null
+    id: C0BP3GKQZLM
   - name: swarm-accuracy
     topic: "The number. Score, trend, delta."
     private: false
     members: ['accuracy', 'claude']
-    id: null
+    id: C0BP8UYD9UH
   - name: swarm-human-gate
     topic: "AWAITING COMMIT cards. Human decides."
     private: true
     members: ['claude', 'admin']
-    id: null
+    id: C0BP8UYBW65
   - name: swarm-incidents
     topic: "Errors, cap breaches, circling, watchdog."
     private: false
     members: ['admin', 'claude']
-    id: null
+    id: C0BPAMTR6DS

@@ -7,7 +7,7 @@ promotion_clause: >
   Generates alternatives that did not exist. Cannot fold into the author: a reviewer sharing identity inherits its framing.
 
 runtime: hermes
-model: openrouter/deepseek/deepseek-v4-flash
+model: openrouter/qwen/qwen3-coder-flash
 token_env: SLACK_BOT_CRITIC
 primary_channel: swarm-critique
 

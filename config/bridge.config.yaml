@@ -1,0 +1,181 @@
+// Bridge configuration — maps Slack events to agent runtimes
+# Generated from agents/*/agent.yaml + config/channels.yaml
+# Run: swarmctl config:render
+
+bridge:
+  app_token_env: SLACK_APP_TOKEN
+  target_accuracy: 0.98
+  max_attempts_per_theme: 2
+  human_gate_channel: swarm-human-gate
+  never_run: ["git commit", "git push", "git merge", "git rebase", "git reset --hard"]
+  dry_run: false
+  swarm_paused: false
+
+  # Agent runtime mapping — populated from agent.yaml at bootstrap
+  agents:
+    claude:
+      token_env: SLACK_BOT_CLAUDE
+      runtime: claude
+      model: claude-opus-4-8
+      channels: [swarm-command, swarm-admin, swarm-planning, swarm-review, swarm-human-gate, swarm-incidents]
+      context_policy: documents-only
+      session: fresh
+      capabilities: [analyse.codebase, plan.workorder, enrich.documents, interpret.verification]
+
+    admin:
+      token_env: SLACK_BOT_ADMIN
+      runtime: hermes
+      model: openrouter/deepseek/deepseek-v4-flash
+      channels: [swarm-command, swarm-admin, swarm-critique, swarm-research, swarm-code, swarm-tests, swarm-video, swarm-accuracy, swarm-human-gate, swarm-incidents]
+      context_policy: discipline
+      capabilities: [decompose.workorder, route.capability, sequence.dependencies, report.compile]
+      slack_role: listener  # Socket Mode event listener
+
+    critic:
+      token_env: SLACK_BOT_CRITIC
+      runtime: hermes
+      model: openrouter/qwen/qwen3-coder-flash
+      channels: [swarm-critique, swarm-admin, swarm-code, swarm-planning]
+      context_policy: discipline
+      capabilities: [critique.workorder, critique.plan]
+
+    researcher:
+      token_env: SLACK_BOT_RESEARCH
+      runtime: hermes
+      model: openrouter/deepseek/deepseek-v4-flash
+      channels: [swarm-research, swarm-admin, swarm-scout, swarm-planning]
+      context_policy: discipline
+      capabilities: [research.patent, research.competitor, research.api, research.literature]
+      executor:
+        agent: opencode
+        max_concurrent: 2
+
+    coder:
+      token_env: SLACK_BOT_CODER
+      runtime: hermes
+      model: openrouter/qwen/qwen3-coder-flash
+      channels: [swarm-code, swarm-admin, swarm-critique, swarm-tests, swarm-video]
+      context_policy: discipline
+      capabilities: [code.implement, code.refactor, code.debug, code.scaffold, test.triage]
+      requires_precode_critique: true
+      executor:
+        agent: openclaw
+        max_concurrent: 2
+        timeout_seconds: 900
+
+    openclaw:
+      token_env: SLACK_BOT_OPENCLAW
+      runtime: openclaw
+      model: claude-haiku-4-5
+      channels: [swarm-code, swarm-admin, swarm-critique, swarm-tests, swarm-video, swarm-human-gate]
+      context_policy: full
+      capabilities: [code.implement, code.refactor, code.debug, code.scaffold]
+
+    opencode:
+      token_env: SLACK_BOT_OPENCODE
+      runtime: opencode
+      model: opencode/big-pickle
+      channels: [swarm-dev, swarm-research, swarm-code, swarm-tests, swarm-video, swarm-accuracy, swarm-scout]
+      context_policy: full
+      capabilities: [web.fetch, web.render, web.scrape, shell.exec, test.suite, build.widget, code.scaffold, file.read, file.write]
+
+    # Personas — no agent behind them, just operation + Slack identity
+    personas:
+      testrunner:
+        token_env: SLACK_BOT_TEST
+        channel: swarm-tests
+        backed_by: operation:test.suite
+        display_name: VTO TestRunner
+
+      videotester:
+        token_env: SLACK_BOT_VIDEO
+        channel: swarm-video-ui
+        backed_by: operation:video.run
+        then: skill:vto/visual-diff
+        display_name: VTO VideoTester
+
+      accuracy:
+        token_env: SLACK_BOT_ACCURACY
+        channel: swarm-accuracy
+        backed_by: operation:accuracy.score
+        display_name: VTO Accuracy
+
+      scout:
+        token_env: SLACK_BOT_SCOUT
+        channel: swarm-scout
+        backed_by: skill:_shared/web-harvest
+        display_name: VTO Scout
+
+  # Loop control
+  loop:
+    improvement_loop_workflow: improvement-loop.yaml
+    recovery_loop_workflow: recovery-loop.yaml
+    enrich_workflow: enrich.yaml
+    research_loop_workflow: research-loop.yaml
+
+  # Routing rules — evaluated on each Slack event
+  routing:
+    # @mention = explicit hand-off
+    mention:
+      - pattern: '@VTO-Admin'
+        target: agent:admin
+      - pattern: '@VTO-Critic'
+        target: agent:critic
+      - pattern: '@VTO-Researcher'
+        target: agent:researcher
+      - pattern: '@VTO-Coder'
+        target: agent:coder
+      - pattern: '@VTO-OpenClaw'
+        target: agent:openclaw
+      - pattern: '@VTO-OpenCode'
+        target: agent:opencode
+      - pattern: '@VTO-Claude'
+        target: agent:claude
+
+    # Reaction-based transitions
+    reaction:
+      '✅':  # approval
+        from: [swarm-tests, swarm-video-ui, swarm-accuracy, swarm-review]
+        action: advance_workflow
+      '❌':  # failure
+        from: [swarm-tests, swarm-video-ui]
+        action: route_to_coder_triage
+      '🔄':  # redo from research
+        from: [swarm-accuracy]
+        action: redo_from_research
+      '🚦':  # at gate
+        from: [swarm-planning, swarm-review]
+        action: await_verdict
+      '🧑‍⚖️':  # needs human
+        from: [swarm-human-gate]
+        action: notify_human
+
+    # Task-id header parsing — every message must start with [T### · loop N · stage=X]
+    task_header:
+      pattern: '\\[T(\\d+) \\· loop (\\d+) \\· stage=(\\w+)\\]'
+      required: true
+
+  # Context assembly — per tier
+  context:
+    documents_only:  # Tier 1 (Claude)
+      sources:
+        - llm.md
+        - trajectory.md
+        - repo_snapshot_since_last_enrich
+        - one_curated_report  # capped 2000 chars, from Admin
+      reads_messages: false  # STRUCTURALLY IMPOSSIBLE
+
+    discipline:  # Tier 2 (Admin, Critic, Researcher, Coder)
+      sources:
+        - task_thread_messages  # filtered to task-id
+        - own_channel_history   # last 50 messages
+        - relevant_progressive_doc  # llm.md or claude.md for codebase
+      session: fresh_per_task
+
+    full:  # Tier 3 (OpenClaw, OpenCode)
+      sources:
+        - complete_cross_channel_task_history  # all channels, filtered by task-id
+        - prior_attempts_and_errors
+        - diffs_and_artifacts
+        - codebase_claude_md
+      session: fresh_per_run

@@ -7,7 +7,7 @@ promotion_clause: >
   Generates implementations and stuck diagnoses. Holds the diff and the intent, which is why test triage lives here.
 
 runtime: hermes
-model: openrouter/deepseek/deepseek-v4-flash
+model: openrouter/qwen/qwen3-coder-flash
 token_env: SLACK_BOT_CODER
 primary_channel: swarm-code
 

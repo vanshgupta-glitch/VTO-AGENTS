@@ -7,7 +7,7 @@ promotion_clause: >
   Decomposition is generative. Holds live queue state, which D-002 forbids the strategist from holding.
 
 runtime: hermes
-model: openrouter/deepseek/deepseek-v4-pro
+model: openrouter/deepseek/deepseek-v4-flash
 token_env: SLACK_BOT_ADMIN
 primary_channel: swarm-admin
 

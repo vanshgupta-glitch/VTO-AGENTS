@@ -1,0 +1,24 @@
+id: opencode
+display_name: VTO OpenCode
+tier: 3
+kind: executor
+runtime: opencode
+model: opencode/big-pickle
+token_env: SLACK_BOT_OPENCODE
+primary_channel: swarm-scout
+also_reads: [swarm-research]
+# WEB-FETCHER ONLY (owner directive 2026-08-10): free, fast, high-volume/redundant data
+# gathering. NOT a code writer — code.*/build/test belong to Coder+Critic (qwen3-coder-flash)
+# and the TestRunner/VideoTester/Accuracy operation-personas.
+capabilities: [web.fetch, web.render, web.scrape, file.read, file.write]
+allowed_operations: [web.fetch, web.render, web.screenshot, web.har, file.read, file.write, file.glob, file.grep]
+skills: []
+knowledge: [swarm-protocol@^1, vto-domain@^1, shopify-conventions@^1]
+recovery:
+  max_attempts: 2
+  escalates_to: admin
+  consult_solutions: true
+reports:
+  on_success: admin
+  on_escalation: admin
+enabled: true

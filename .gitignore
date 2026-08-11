@@ -7,3 +7,4 @@ ORCHESTRATION-ARCHIVE.md
 .env
 *.secrets.env
 data/
+node_modules/
