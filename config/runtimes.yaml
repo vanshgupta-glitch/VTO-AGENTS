@@ -5,23 +5,27 @@ runtimes:
     bin: C:/Users/vansh.gupta/AppData/Local/hermes/hermes-agent/venv/Scripts/hermes.exe
     version_flag: "--version"
     expected_version: "Hermes Agent v0.18.0 (2026.7.1)  upstream 845a2d81"
-    cmd_template: ["-p", "{profile}", "--prompt-file", "{instruction_file}"]
+    cmd_template: ["-p", "{profile}", "-z", "{message}"]
+    inline_prompt: true
+    model_override_template: ["-m", "{model}", "--provider", "openrouter"]
   openclaw:
     bin: C:/Users/vansh.gupta/.agentic-os/bin/openclaw.exe
     version_flag: "--version"
     expected_version: "OpenClaw 2026.7.1-2 (0790d9f)"
-    cmd_template: ["--agent", "{agent}", "--prompt-file", "{instruction_file}"]
+    cmd_template: ["agent", "--agent", "{agent}", "--message-file", "{instruction_file}", "--json"]
   opencode:
-    bin: C:/Users/vansh.gupta/AppData/Roaming/npm/opencode.cmd
+    bin: C:/Users/vansh.gupta/AppData/Roaming/npm/node_modules/opencode-ai/bin/opencode.exe
     version_flag: "--version"
     expected_version: "1.18.16"
     cmd_template: ["run", "{message}", "-m", "{model}"]
     strip_ansi: true
+    inline_prompt: true
   claude:
     bin: C:/Users/vansh.gupta/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe
     version_flag: "--version"
     expected_version: "2.1.228 (Claude Code)"
     cmd_template: ["-p", "{instruction}", "--model", "{model}"]
+    inline_prompt: true
   python:
     bin: C:/Users/vansh.gupta/AppData/Local/hermes/hermes-agent/venv/Scripts/python.exe
     version_flag: "--version"

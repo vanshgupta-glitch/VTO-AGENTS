@@ -15,7 +15,7 @@ Safety
     because the file is generated: every value is derived from Agent OS
     config or PATH.
 """
-import json, shutil, subprocess, sys
+import json, re, shutil, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,13 +23,62 @@ AGENTIC = Path.home() / ".agentic-os" / "config.json"
 OUT = ROOT / "config" / "runtimes.yaml"
 
 # name -> (agentic-os config key, cmd_template, extra keys)
+#
+# Every template below is verified against the tool's real `--help` on this
+# machine. The previous file invented `--prompt-file` for BOTH hermes and
+# openclaw; neither accepts it, which is exactly what this file's own header
+# warns against ("NEVER invent flags - confirm with --help").
+#
+#   hermes    -z/--oneshot takes the prompt INLINE. There is no prompt-file
+#             option, so `inline_prompt: true` marks it for the length guard
+#             in runtimes.ts (Windows caps a command line at 32767 chars).
+#   openclaw  `agent` is a SUBCOMMAND, not a flag, and it does accept a file
+#             via --message-file.
+#   opencode  `run [message..] -m <model>` - the original template was right.
 SPEC = {
-    "hermes":   ("hermes",   ["-p", "{profile}", "--prompt-file", "{instruction_file}"], {}),
-    "openclaw": ("openclaw", ["--agent", "{agent}", "--prompt-file", "{instruction_file}"], {}),
-    "opencode": (None,       ["run", "{message}", "-m", "{model}"], {"strip_ansi": True}),
-    "claude":   ("claude",   ["-p", "{instruction}", "--model", "{model}"], {}),
+    # model_override_template is appended ONLY when SWARM_MODEL_OVERRIDE is set,
+    # so a smoke test can run on a free model without editing agents/*.yaml
+    # (which setup.py hashes, and which the cost spec protects from being used
+    # as a cost lever). Unset in normal operation.
+    "hermes":   ("hermes",   ["-p", "{profile}", "-z", "{message}"],
+                 {"inline_prompt": True,
+                  "model_override_template": ["-m", "{model}", "--provider", "openrouter"]}),
+    "openclaw": ("openclaw", ["agent", "--agent", "{agent}",
+                              "--message-file", "{instruction_file}", "--json"], {}),
+    "opencode": (None,       ["run", "{message}", "-m", "{model}"],
+                 {"strip_ansi": True, "inline_prompt": True}),
+    "claude":   ("claude",   ["-p", "{instruction}", "--model", "{model}"],
+                 {"inline_prompt": True}),
     "python":   (None,       [], {}),
 }
+
+
+def dereference_shim(path):
+    """Resolve an npm .cmd shim to the real executable it wraps.
+
+    This is decision D-015 in practice: the name on PATH may be a shim. Node 20+
+    refuses to spawn a .cmd without a shell (CVE-2024-27980), so pointing the
+    swarm at `opencode.cmd` fails with a bare EINVAL -- and the workaround,
+    shell: true, would open command injection on a prompt that arrives from
+    Slack. Pointing at the .exe avoids both.
+
+    npm shims contain a line like:
+        "%dp0%\\node_modules\\opencode-ai\\bin\\opencode.exe"   %*
+    """
+    p = Path(path)
+    if p.suffix.lower() not in (".cmd", ".bat"):
+        return path
+    try:
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.search(r'"%dp0%\\?(.+?)"', line)
+            if not m:
+                continue
+            target = (p.parent / m.group(1).lstrip("\\")).resolve()
+            if target.exists() and target.suffix.lower() == ".exe":
+                return str(target)
+    except Exception:
+        pass
+    return path
 
 
 def resolve(name, key):
@@ -38,13 +87,15 @@ def resolve(name, key):
         try:
             v = json.loads(AGENTIC.read_text(encoding="utf-8")).get(key)
             if v and Path(v).exists():
-                return str(Path(v)).replace("\\", "/")
+                return dereference_shim(str(Path(v))).replace("\\", "/")
         except Exception:
             pass
     if name == "python":
         return sys.executable.replace("\\", "/")
     w = shutil.which(name)
-    return str(Path(w).resolve()).replace("\\", "/") if w else None
+    if not w:
+        return None
+    return dereference_shim(str(Path(w).resolve())).replace("\\", "/")
 
 
 def version_of(binpath):
@@ -87,7 +138,8 @@ def build():
         if tmpl:
             lines.append(f"    cmd_template: {json.dumps(tmpl)}")
         for k, val in extra.items():
-            lines.append(f"    {k}: {str(val).lower()}")
+            rendered = json.dumps(val) if isinstance(val, list) else str(val).lower()
+            lines.append(f"    {k}: {rendered}")
     return "\n".join(lines) + "\n", missing
 
 

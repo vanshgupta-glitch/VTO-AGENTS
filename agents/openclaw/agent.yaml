@@ -1,0 +1,32 @@
+id: openclaw
+display_name: VTO OpenClaw
+tier: 3
+kind: executor
+runtime: openclaw
+# OpenClaw's model is GLOBAL and set outside this registry: `openclaw models set`
+# rejects --agent (VTO-AGENT-SYSTEM sec.12). This records the live value so the
+# registry does not silently disagree with the tool. Verified 2026-08-12 via
+# `openclaw models status`. Note config/bridge.config.yaml claims
+# claude-haiku-4-5 for this agent; that was never true on this machine.
+model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+# No SLACK_BOT_OPENCLAW app exists. OpenClaw runs UNDER Coder and posts with
+# Coder's identity, per doc/SLACK-SETUP.md sec.1.
+token_env: SLACK_BOT_CODER
+primary_channel: swarm-code
+also_reads: [swarm-admin, swarm-critique, swarm-tests]
+
+# CODE EXECUTOR. Holds 1M context so it can read a real slice of the monorepo.
+# It executes; it does not decide. Decomposition stays with Admin, review with
+# Critic, and the diff-plus-intent with Coder.
+capabilities: [code.implement, code.refactor, code.debug, code.scaffold]
+allowed_operations: [repo.diff, repo.write, file.read, file.write, file.glob, file.grep, build.widget, test.suite, test.types, lint]
+skills: []
+knowledge: [swarm-protocol@^1, vto-domain@^1, shopify-conventions@^1]
+recovery:
+  max_attempts: 2
+  escalates_to: coder
+  consult_solutions: true
+reports:
+  on_success: coder
+  on_escalation: coder
+enabled: true

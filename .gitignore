@@ -8,3 +8,9 @@ ORCHESTRATION-ARCHIVE.md
 *.secrets.env
 data/
 node_modules/
+
+# compiled test output. dist/ itself IS committed -- SLACK-SETUP.md tells
+# operators to run `node cli/dist/swarmctl.js` with no build step -- but the
+# compiled tests are noise that never runs (tests execute from src via tsx).
+**/dist/*.test.js
+**/dist/*.test.d.ts

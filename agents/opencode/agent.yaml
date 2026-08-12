@@ -3,7 +3,11 @@ display_name: VTO OpenCode
 tier: 3
 kind: executor
 runtime: opencode
-model: opencode/big-pickle
+# opencode/big-pickle hangs indefinitely on this machine -- it opened a run that
+# never returned, and the bridge sat on it for the full 900s timeout. The -free
+# tier answers in seconds and costs nothing, which also satisfies the owner
+# directive that checks must not spend. Verified 2026-08-12.
+model: opencode/nemotron-3.5-lightning-free
 token_env: SLACK_BOT_OPENCODE
 primary_channel: swarm-scout
 also_reads: [swarm-research]

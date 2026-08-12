@@ -16,7 +16,7 @@ bridge:
     claude:
       token_env: SLACK_BOT_CLAUDE
       runtime: claude
-      model: claude-opus-4-8
+      model: claude-opus-5
       channels: [swarm-command, swarm-admin, swarm-planning, swarm-review, swarm-human-gate, swarm-incidents]
       context_policy: documents-only
       session: fresh
@@ -64,9 +64,12 @@ bridge:
         timeout_seconds: 900
 
     openclaw:
-      token_env: SLACK_BOT_OPENCLAW
+      # No SLACK_BOT_OPENCLAW app exists; OpenClaw runs under Coder and posts
+      # with Coder's identity (doc/SLACK-SETUP.md sec.1). Model is global to
+      # OpenClaw and set outside this registry; this is the live value.
+      token_env: SLACK_BOT_CODER
       runtime: openclaw
-      model: claude-haiku-4-5
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
       channels: [swarm-code, swarm-admin, swarm-critique, swarm-tests, swarm-video, swarm-human-gate]
       context_policy: full
       capabilities: [code.implement, code.refactor, code.debug, code.scaffold]
@@ -74,7 +77,8 @@ bridge:
     opencode:
       token_env: SLACK_BOT_OPENCODE
       runtime: opencode
-      model: opencode/big-pickle
+      # big-pickle hangs indefinitely here; the -free tier answers in seconds.
+      model: opencode/nemotron-3.5-lightning-free
       channels: [swarm-dev, swarm-research, swarm-code, swarm-tests, swarm-video, swarm-accuracy, swarm-scout]
       context_policy: full
       capabilities: [web.fetch, web.render, web.scrape, shell.exec, test.suite, build.widget, code.scaffold, file.read, file.write]
@@ -152,7 +156,11 @@ bridge:
 
     # Task-id header parsing — every message must start with [T### · loop N · stage=X]
     task_header:
-      pattern: '\\[T(\\d+) \\· loop (\\d+) \\· stage=(\\w+)\\]'
+      # Single-escaped. YAML single quotes do not process backslash escapes, so
+      # the previous '\\[T(\\d+) ...' reached the regex engine as an escaped
+      # literal backslash followed by an open character class and matched
+      # nothing -- while `required: true` below rejects anything unmatched.
+      pattern: '\[T(\d+) · loop (\d+) · stage=(\w+)\]'
       required: true
 
   # Context assembly — per tier

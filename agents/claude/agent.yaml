@@ -7,7 +7,7 @@ promotion_clause: >
   Sole holder of strategic context; the only role that can change what the system pursues. A4 is definitionally singular.
 
 runtime: claude
-model: claude-opus-4-8
+model: claude-opus-5
 token_env: SLACK_BOT_CLAUDE
 primary_channel: swarm-analysis
 

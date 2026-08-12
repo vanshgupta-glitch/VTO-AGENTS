@@ -229,4 +229,54 @@ program
     console.log('  4. Spawn local CLI with context file');
     console.log('  5. Post results back to Bridge');
 });
+program
+    .command('ask')
+    .description('Send a request to the swarm (requires the bridge daemon)')
+    .argument('<text...>', 'What you want the swarm to do')
+    .option('--agent <id>', 'Agent to address', 'admin')
+    .action(async (parts, opts) => {
+    const port = process.env.SWARM_BRIDGE_PORT ?? '8787';
+    const text = parts.join(' ');
+    let res;
+    try {
+        res = await fetch(`http://127.0.0.1:${port}/ask`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ agent: opts.agent, text }),
+            // undici gives up after 300s by default, but the bridge allows a run
+            // up to swarm.config.yaml's run_timeout_seconds (900). Without this the
+            // CLI reports a transport failure on a task the daemon is still
+            // running perfectly happily.
+            signal: AbortSignal.timeout(960_000),
+        });
+    }
+    catch (e) {
+        // The daemon is required rather than optional: it is the sole writer to
+        // Slack, and Slack is the record. Falling back to a direct local call
+        // would answer the question while leaving no trace in the channel.
+        //
+        // Distinguish "nothing is listening" from every other transport failure.
+        // Reporting them identically sent us hunting a dead daemon that was in
+        // fact alive and healthy.
+        const cause = e?.cause;
+        const code = cause?.code ?? '';
+        if (code === 'ECONNREFUSED') {
+            console.error(`Bridge not reachable on 127.0.0.1:${port} - nothing is listening.`);
+            console.error('Start it with:  pnpm --filter vto-bridge dev');
+        }
+        else {
+            console.error(`Request to the bridge failed${code ? ` (${code})` : ''}: ${String(e)}`);
+            console.error('The daemon may be up but the request did not complete.');
+            console.error(`Check it with:  curl http://127.0.0.1:${port}/health`);
+        }
+        process.exit(1);
+        return;
+    }
+    const j = (await res.json());
+    if (j.taskId)
+        console.log(`\n${j.taskId}\n`);
+    console.log(j.reply || j.error || '(no output)');
+    if (!res.ok)
+        process.exit(1);
+});
 program.parse(process.argv);
