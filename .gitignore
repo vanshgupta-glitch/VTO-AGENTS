@@ -8,3 +8,5 @@ ORCHESTRATION-ARCHIVE.md
 *.secrets.env
 data/
 node_modules/
+config/machine.local.json
+dist/
