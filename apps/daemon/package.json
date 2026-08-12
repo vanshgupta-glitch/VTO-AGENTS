@@ -8,7 +8,8 @@
     "start": "node dist/daemon.js"
   },
   "dependencies": {
-    "@vto-swarm/db": "workspace:*"
+    "@vto-swarm/db": "workspace:*",
+    "@vto-swarm/operations": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -13,7 +13,7 @@ const execFileP = promisify(execFile);
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
-export type RuntimeName = 'hermes' | 'claude' | 'opencode' | 'openclaw';
+export type RuntimeName = 'hermes' | 'claude' | 'opencode' | 'openclaw' | 'operation';
 
 export interface WorkerDef {
   role: string;
@@ -21,6 +21,7 @@ export interface WorkerDef {
   profile?: string; // hermes
   model?: string; // claude / opencode
   agent?: string; // openclaw
+  op?: 'build' | 'lint' | 'deploy' | 'video' | 'accuracy'; // runtime === 'operation'
   maxConcurrent: number;
 }
 

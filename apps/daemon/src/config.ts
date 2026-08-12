@@ -18,6 +18,10 @@ export function loadSecrets(): void {
 export interface MachineConfig {
   machineId?: string;
   operator: string;
+  /** Absolute path to the product repo (rkumar-vto) for operation workers. */
+  repoPath?: string;
+  storeUrl?: string;
+  storePassword?: string;
   runtimes: RuntimePaths;
   workers: WorkerDef[];
 }

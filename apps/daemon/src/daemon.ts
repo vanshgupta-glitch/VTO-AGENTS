@@ -13,8 +13,10 @@ import {
   claimTask,
   finishTask,
   enqueuePost,
+  enqueueTask,
   type Task,
 } from '@vto-swarm/db';
+import { execute, type Operation, type OpConfig } from '@vto-swarm/operations';
 import { loadSecrets, loadMachine } from './config.js';
 import { runRuntime, type WorkerDef } from './runtimes.js';
 
@@ -29,36 +31,105 @@ interface TaskPayload {
   text?: string;
   ts?: string;
   channel?: string;
+  file?: string;
+  loop?: boolean;
+}
+
+/**
+ * Which bot identity an operation worker posts under (LLM workers post under their own role).
+ * NOTE: routed through 'admin' for now — the testrunner/videotester/accuracy bots are not members
+ * of #swarm-command yet, so their posts fail (not_in_channel). Restore per-persona once invited.
+ */
+const OP_POST_BOT: Record<string, string> = {
+  build: 'admin',
+  lint: 'admin',
+  deploy: 'admin',
+  video: 'admin',
+  accuracy: 'admin',
+};
+const postAgentFor = (w: WorkerDef): string =>
+  w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : w.role;
+
+function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
+  switch (w.op) {
+    case 'build':
+      return { op: 'build', file: payload.file };
+    case 'lint':
+      return { op: 'lint', file: payload.file ?? 'packages/vto-core/src/engine/landmark-debug-engine.ts' };
+    case 'deploy':
+      return { op: 'deploy' };
+    case 'video':
+      return { op: 'video', url: machine.storeUrl ?? '', password: machine.storePassword ?? '', seconds: 20 };
+    case 'accuracy':
+      return { op: 'accuracy' };
+    default:
+      throw new Error(`operation worker ${w.role} has no op configured`);
+  }
+}
+
+/** Advance the engineering loop on success (only for loop-tagged tasks). improve→build→deploy→video+accuracy. */
+async function chainNext(task: Task): Promise<void> {
+  const p = task.payload as TaskPayload;
+  if (!p.loop) return;
+  const carry = {
+    channel: task.channel,
+    requestedBy: 'loop',
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file },
+  };
+  if (task.kind === 'improve') await enqueueTask({ ...carry, role: 'build', kind: 'build' });
+  else if (task.kind === 'build') await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' });
+  else if (task.kind === 'deploy') {
+    await enqueueTask({ ...carry, role: 'video', kind: 'video' });
+    await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' });
+  }
 }
 
 async function handleTask(w: WorkerDef, task: Task): Promise<void> {
   const payload = task.payload as TaskPayload;
-  const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
-  const prompt = `${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`;
   try {
-    const out = await runRuntime(w, prompt, machine.runtimes);
-    await finishTask(task.id, workerId(w), 'done', { chars: out.length });
+    let ok = true;
+    let text: string;
+    if (w.runtime === 'operation') {
+      const cfg: OpConfig = {
+        repoPath: machine.repoPath ?? '',
+        storeUrl: machine.storeUrl,
+        storePassword: machine.storePassword,
+      };
+      const res = await execute(buildOperation(w, payload), cfg);
+      ok = res.ok;
+      const secs = Math.round(res.durationMs / 1000);
+      text = `*[${res.op}]* ${res.summary}  _(${secs}s)_${ok ? '' : `\n\`\`\`${res.tail.slice(-900)}\`\`\``}`;
+    } else {
+      const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
+      text = await runRuntime(
+        w,
+        `${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
+        machine.runtimes,
+      );
+    }
+    await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok });
     if (task.channel) {
       await enqueuePost({
         channel: task.channel,
-        agent: w.role,
-        text: (out || '(empty response)').slice(0, 2800),
+        agent: postAgentFor(w),
+        text: (text || '(empty)').slice(0, 2800),
         threadTs: payload.ts ?? null,
       });
     }
-    console.log(`[daemon] ${w.role} DONE task ${task.id} (${out.length} chars)`);
+    console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
+    if (ok) await chainNext(task);
   } catch (e) {
     const msg = (e as Error).message;
     await finishTask(task.id, workerId(w), 'failed', null, msg);
     if (task.channel) {
       await enqueuePost({
         channel: task.channel,
-        agent: w.role,
+        agent: postAgentFor(w),
         text: `:warning: ${w.role} failed: ${msg.slice(0, 300)}`,
         threadTs: payload.ts ?? null,
       });
     }
-    console.warn(`[daemon] ${w.role} FAILED task ${task.id}: ${msg.slice(0, 200)}`);
+    console.warn(`[daemon] ${w.role} ERROR task ${task.id}: ${msg.slice(0, 200)}`);
   }
 }
 
