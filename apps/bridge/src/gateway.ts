@@ -16,6 +16,10 @@ import {
   enqueueTask,
   claimNextPost,
   markPost,
+  linkGatePost,
+  getGateByPostTs,
+  approveHumanGate,
+  rejectHumanGate,
 } from '@vto-swarm/db';
 import { loadSecrets, AGENTS, type AgentKey } from './config.js';
 
@@ -35,10 +39,41 @@ function clientFor(agent: AgentKey): WebClient {
   return c;
 }
 
-/** First `@vto-<agent>` mention in the text → that agent/role, else null. */
+/** Real Slack @-mentions of our agent bots, resolved at startup: '<@U123>' → agent role. */
+const mentionToAgent = new Map<string, AgentKey>();
+
+/**
+ * Which agent is this channel message addressed to? Accepts, in priority order:
+ *   1. a REAL Slack mention of the bot   — `<@U123>` (what the @ autocomplete produces)
+ *   2. a typed handle                    — `@vto-researcher`, `vto-researcher`, `vto researcher`
+ *   3. a short command                   — `!researcher …`, or a leading `researcher: …`
+ * So ANY channel member (Rohit or Vansh) can assign a task without knowing the internals.
+ */
 function parseTarget(text: string): AgentKey | null {
-  const low = text.toLowerCase();
-  return AGENT_KEYS.find((k) => low.includes(`@vto-${k}`)) ?? null;
+  for (const [mention, agent] of mentionToAgent) {
+    if (text.includes(mention)) return agent;
+  }
+  for (const k of AGENT_KEYS) {
+    const re = new RegExp(String.raw`@?vto[-\s]${k}\b|(?:^|\s)!${k}\b|(?:^|\s)${k}\s*:`, 'i');
+    if (re.test(text)) return k;
+  }
+  return null;
+}
+
+/** Ask Slack for each agent bot's user id so real @-mentions map back to a role. */
+async function resolveMentions(): Promise<void> {
+  for (const agent of AGENT_KEYS) {
+    if (!secrets[AGENTS[agent].tokenEnv]) continue;
+    try {
+      const res = await clientFor(agent).auth.test();
+      if (res.user_id) {
+        mentionToAgent.set(`<@${res.user_id}>`, agent);
+        console.log(`[gateway] ${agent} bot = <@${res.user_id}>`);
+      }
+    } catch (e) {
+      console.warn(`[gateway] could not resolve ${agent} bot id:`, (e as Error).message);
+    }
+  }
 }
 
 interface SlackEvent {
@@ -60,6 +95,19 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
   if (!(await dedupSlackEvent(dedupId, event.channel ?? null, event.ts ?? null))) return; // duplicate
   const target = parseTarget(event.text);
   if (!target) return;
+  // Workflow triggers (D-034): "improve <goal>" or "workflow <name>: <goal>" → dispatcher intake.
+  const wfMatch = event.text.match(/\b(?:improve|workflow)\s+(?:loop|improvement-loop)?\s*[:,-]?\s*(.+)/i);
+  if (target === 'admin' && wfMatch && wfMatch[1]) {
+    await enqueueTask({
+      role: 'admin',
+      kind: 'workflow',
+      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel },
+      channel: event.channel ?? null,
+      requestedBy: event.user ?? null,
+    });
+    console.log(`[gateway] queued workflow trigger from ${event.user ?? '?'}`);
+    return;
+  }
   await enqueueTask({
     role: target,
     kind: target,
@@ -70,17 +118,38 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
   console.log(`[gateway] queued ${target} task from ${event.user ?? '?'} in ${event.channel ?? '?'}`);
 }
 
+/** Human gate reactions (D-034): 👍/✅ approve, 👎/❌ reject. Gate is resolved by post ts. */
+async function onReaction(args: { event?: { item?: { ts?: string }; user?: string; reaction?: string; item_user?: string }; ack?: () => Promise<void> }): Promise<void> {
+  const { event, ack } = args;
+  if (ack) await ack();
+  if (!event?.item?.ts || !event.user || event.item_user === undefined) return;
+  if (event.reaction === 'white_check_mark' || event.reaction === '+1' || event.reaction === 'approve') {
+    const gate = await getGateByPostTs(event.item.ts);
+    if (gate) {
+      await approveHumanGate(gate.id, event.user);
+      console.log(`[gateway] human gate #${gate.id} approved by ${event.user}`);
+    }
+  } else if (event.reaction === 'x' || event.reaction === '-1' || event.reaction === 'reject') {
+    const gate = await getGateByPostTs(event.item.ts);
+    if (gate) {
+      await rejectHumanGate(gate.id, event.user);
+      console.log(`[gateway] human gate #${gate.id} rejected by ${event.user}`);
+    }
+  }
+}
+
 /** Drain one queued post per tick — ~1/sec globally keeps Slack's per-channel limit safe. */
 async function posterTick(): Promise<void> {
   const post = await claimNextPost();
   if (!post) return;
   try {
-    await clientFor(post.agent as AgentKey).chat.postMessage({
+    const res = await clientFor(post.agent as AgentKey).chat.postMessage({
       channel: post.channel,
       text: post.text,
       thread_ts: post.thread_ts ?? undefined,
     });
     await markPost(post.id, 'sent');
+    if (post.link_gate_id && res.ts) await linkGatePost(post.link_gate_id, res.ts);
   } catch (e) {
     console.warn(`[gateway] post ${post.id} failed:`, (e as Error).message);
     await markPost(post.id, 'failed');
@@ -91,12 +160,14 @@ async function main(): Promise<void> {
   const appToken = secrets.SLACK_APP_TOKEN;
   if (!appToken) throw new Error('SLACK_APP_TOKEN missing in config/.secrets.env');
   await registerMachine(MACHINE_ID, 'rohit', 'gateway');
+  await resolveMentions();
   setInterval(() => void heartbeatMachine(MACHINE_ID).catch(() => {}), 30_000);
   setInterval(() => void posterTick().catch((e) => console.warn('[gateway] poster', e)), 1100);
 
   const socket = new SocketModeClient({ appToken });
   socket.on('message', onEvent);
   socket.on('app_mention', onEvent);
+  socket.on('reaction_added', onReaction);
   await socket.start();
   console.log(`[gateway] online as ${MACHINE_ID} — one Slack listener + serialized poster.`);
 }

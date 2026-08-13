@@ -14,6 +14,7 @@ import {
   finishTask,
   enqueuePost,
   enqueueTask,
+  recoverStale,
   type Task,
 } from '@vto-swarm/db';
 import { execute, type Operation, type OpConfig } from '@vto-swarm/operations';
@@ -43,6 +44,7 @@ interface TaskPayload {
 const OP_POST_BOT: Record<string, string> = {
   build: 'admin',
   lint: 'admin',
+  test: 'admin',
   deploy: 'admin',
   video: 'admin',
   accuracy: 'admin',
@@ -56,6 +58,8 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
       return { op: 'build', file: payload.file };
     case 'lint':
       return { op: 'lint', file: payload.file ?? 'packages/vto-core/src/engine/landmark-debug-engine.ts' };
+    case 'test':
+      return { op: 'test' };
     case 'deploy':
       return { op: 'deploy' };
     case 'video':
@@ -107,7 +111,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         machine.runtimes,
       );
     }
-    await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok });
+    await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });
     if (task.channel) {
       await enqueuePost({
         channel: task.channel,
@@ -162,6 +166,22 @@ async function main(): Promise<void> {
     for (const w of machine.workers) void heartbeatWorker(workerId(w)).catch(() => {});
   }, 30_000);
   setInterval(() => void tick().catch((e) => console.warn('[daemon] tick', e)), 2000);
+  setInterval(
+    () =>
+      recoverStale({ staleSeconds: 90, runMaxSeconds: 1_800 })
+        .then((r) => {
+          if (r.machinesOffline || r.workersReset || r.runsClosed || r.tasksRequeued || r.postsUnstuck) {
+            console.log(`[daemon] recovery: ${JSON.stringify(r)}`);
+          }
+        })
+        .catch((e) => console.warn('[daemon] recovery', e)),
+    30_000,
+  );
+  await recoverStale({ staleSeconds: 90, runMaxSeconds: 1_800 }).then((r) => {
+    if (r.machinesOffline || r.workersReset || r.runsClosed || r.tasksRequeued || r.postsUnstuck) {
+      console.log(`[daemon] recovery (startup): ${JSON.stringify(r)}`);
+    }
+  });
   console.log(`[daemon] online as ${MACHINE_ID} — roles: ${machine.workers.map((w) => w.role).join(', ')}`);
 }
 

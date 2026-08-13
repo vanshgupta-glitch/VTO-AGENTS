@@ -1,0 +1,19 @@
+{
+  "name": "@vto-swarm/dispatcher",
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/dispatcher.ts",
+    "start": "node dist/dispatcher.js"
+  },
+  "dependencies": {
+    "@vto-swarm/db": "workspace:*",
+    "@vto-swarm/operations": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

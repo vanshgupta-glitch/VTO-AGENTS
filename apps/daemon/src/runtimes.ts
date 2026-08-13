@@ -21,7 +21,7 @@ export interface WorkerDef {
   profile?: string; // hermes
   model?: string; // claude / opencode
   agent?: string; // openclaw
-  op?: 'build' | 'lint' | 'deploy' | 'video' | 'accuracy'; // runtime === 'operation'
+  op?: 'build' | 'lint' | 'test' | 'deploy' | 'video' | 'accuracy'; // runtime === 'operation'
   maxConcurrent: number;
 }
 

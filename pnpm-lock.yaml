@@ -78,6 +78,25 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  apps/dispatcher:
+    dependencies:
+      '@vto-swarm/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@vto-swarm/operations':
+        specifier: workspace:*
+        version: link:../../packages/operations
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.0
+        version: 4.23.12
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/db:
     dependencies:
       pg:

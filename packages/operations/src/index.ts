@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 export type Operation =
   | { op: 'build'; file?: string }
   | { op: 'lint'; file: string }
+  | { op: 'test' }
   | { op: 'deploy'; config?: string }
   | { op: 'video'; url: string; password: string; trigger?: string; seconds?: number; only?: string }
   | { op: 'accuracy' };
@@ -87,6 +88,11 @@ export async function execute(op: Operation, cfg: OpConfig): Promise<OpResult> {
       const cmd = `cd "${repo}"; npx eslint ${op.file}`;
       const { code, out } = await runPwsh(cmd, repo, 120_000);
       return done(code === 0, code === 0 ? 'lint clean' : 'lint errors', out);
+    }
+    case 'test': {
+      const cmd = `cd "${repo}"; npm run test:unit`;
+      const { code, out } = await runPwsh(cmd, repo, 240_000);
+      return done(code === 0, code === 0 ? 'unit tests passed' : 'unit tests FAILED', out);
     }
     case 'deploy': {
       // Use --path (cwd-independent). shopify runs node via shopify.ps1 and resolves the app dir

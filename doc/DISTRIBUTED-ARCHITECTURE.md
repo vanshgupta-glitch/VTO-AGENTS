@@ -22,12 +22,14 @@ This deliberately changes three prior positions:
 | ID | Decision |
 |---|---|
 | D-029 | Coordination store = a DEDICATED Supabase Postgres project (isolated PAT in `.secrets.env`). The MCP-connected Supabase account is OFF LIMITS — never touched. |
-| D-030 | Slack = single-gateway. ONE Socket Mode listener (Admin `xapp`) system-wide; workers never open sockets; all outgoing posts serialized through one poster. |
-| D-031 | Gateway host = Rohit's machine (single, no auto-failover in v0.1). Vansh operates fully through it (his Slack messages ingest via Rohit's gateway — "at Rohit's authority"). |
+| D-030 | ~~Slack = single-gateway. ONE Socket Mode listener system-wide.~~ **SUPERSEDED by D-036** (dual peer gateways). |
+| D-031 | ~~Gateway host = Rohit's machine (single, no failover).~~ **SUPERSEDED by D-036** (no special host; both machines ingest). |
 | D-032 | Overflow = implicit. One per-role queue; a worker claims only when it has a free slot; tasks wait until any machine's worker frees up (first-available wins, `SKIP LOCKED`). No hand-off messages. |
 | D-033 | Autonomy = auto through code→build→test→accuracy→**deploy to DEV store**; HALT + human-gate before git commit. Prod deploy still out of scope (D-028). |
 | D-034 | Commit gate = EITHER operator may approve (amends D-008's single-committer). Still human, still never automated. |
 | D-035 | Keys = each machine's agents use THAT machine's own API keys. Borrower's compute, borrower's keys. |
+| D-036 | Slack = **dual peer gateways** (supersedes D-030/D-031). BOTH machines run a gateway; Slack load-balances events across the two Socket-Mode connections and **both write to the one Postgres** (`slack_events` dedup catches retries), so the halves reunite with no loss and no special "host." Outbound: both drain `post_queue` via `SKIP LOCKED` + per-channel guards in `claimNextPost` (skip a channel mid-`sending` or `sent` within ~1.1s) → no double-post, no rate-limit breach, no leader/lease. |
+| D-037 | Task queue = **pgmq / Supabase Queues** (supersedes the raw SKIP-LOCKED claim of D-032; overflow semantics unchanged). One queue per role (`vto_<role>`); claim = `pgmq.read` with a visibility timeout (`SWARM_CLAIM_VT`, default 900s) so a crashed worker's task auto-reappears; finish = `vto_ack`. `recoverStale` no longer requeues tasks (pgmq's timeout is the sole claim-recovery owner). Migrations `0002_orchestration.sql` + `0003_pgmq.sql`. |
 
 ## 2. Topology
 ```
