@@ -82,6 +82,18 @@ Confirm `runtimes.openclaw` points at your `openclaw.ps1`, and `openclaw models 
 claude-cli/Anthropic provider authed (`--local` needs it). Rohit's agent = `vto-coder-rohit`; the shared
 `vto-coder` points at Vansh's OneDrive path — don't reuse it cross-machine.
 
+## Loop machine-affinity (the loop stays on its origin machine)
+
+The eng-loop (code-edit → build → deploy → …) must run on ONE machine (coherent repo). It's now **pinned
+to its origin** via per-machine pgmq queues:
+- A task with `payload.pinnedMachine=<key>` goes to queue `vto_<role>__<key>`; a daemon reads its OWN
+  pinned queue first, then the shared `vto_<role>`. So a pinned loop step can only be claimed by its
+  origin machine — Vansh's daemon won't steal a Rohit-pinned loop step (and vice-versa).
+- The `<key>` is the host key `${process.platform}-${hostname()}` (e.g. `win32-NMG-D-82`).
+- **Slack-initiated** loops (an `improve <goal>` / workflow trigger) are auto-pinned to the gateway's host.
+- **Direct-seeded** loops: set `payload.pinnedMachine` = the target machine's key when you seed the
+  `improve` task. Omit it and the task overflows (shared queue) — correct for one-off (non-loop) tasks.
+
 ## File manifest (vault-root-relative)
 
 | Path | Change |
