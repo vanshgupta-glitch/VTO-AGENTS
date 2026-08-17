@@ -25,6 +25,10 @@ export interface Stage {
     on_success: string; // stage id | 'end' | 'halt' | 'escalate'
     on_fail?: string; // stage id | 'end' | 'halt' | 'escalate' | 'route:<role>'
     on_stuck?: string; // stage id — executed after this stage fails (top-tier review, e.g. CLAUDE_REVIEW)
+    /** small stuck: Tier 3 failure → Tier 2 agent retry (e.g. coder fix, admin re-decompose) */
+    on_small_stuck?: string;
+    /** big stuck: Tier 2 failure → Tier 1 Claude replan (architectural / repeated failure) */
+    on_big_stuck?: string;
     on_empty?: string;
     below_target?: { target: string; carry?: string[] };
   };
@@ -42,14 +46,23 @@ const fanout = (roles?: string[]) => ({ kind: 'fanout', roles } as const);
 
 /**
  * improvement-loop — the main engineering loop (WORKFLOWS §5, mapped to actual roles/ops).
- * Claude (tier-1 strategist, A4) owns analysis/narrative/work-order; it hands a proper command
- * to Admin, who decomposes. Any executor stage that fails routes to CLAUDE_REVIEW — Claude's stuck
- * analysis becomes the Admin rework directive (dispatcher.ts).
+ *
+ * Three-tier architecture:
+ *   Tier 1 (Claude strategist): ANALYSE → NARRATIVE → PLAN — owns the plan
+ *   Tier 2 (Agent orchestrators): DECOMPOSE (admin) → PRE_CODE (critic) — breaks into subtasks
+ *   Tier 3 (Executors): CODE (coder/OpenClaw) → TEST → VIDEO → ACCURACY — executes
+ *
+ * Stuck escalation (two-tier):
+ *   Small stuck: Tier 3 executor fails → route back to Tier 2 agent for local fix (coder rework,
+ *     admin re-decompose). Capped at 2 retries before escalating to big stuck.
+ *   Big stuck: Tier 2 agent fails or repeated small stuck → route to Tier 1 (Claude) for full
+ *     replan from ANALYSE. Claude produces a new work order and the loop restarts.
  */
 const improvementLoop: WorkflowDef = {
   name: 'improvement-loop',
   entry: 'ANALYSE',
   stages: {
+    // ── Tier 1: Claude strategist (plan only, no execution) ───────────────
     ANALYSE: {
       id: 'ANALYSE',
       executor: agent('claude'),
@@ -69,36 +82,69 @@ const improvementLoop: WorkflowDef = {
       produces: 'work_order',
       transitions: { on_success: 'DECOMPOSE', on_fail: 'ANALYSE' },
     },
+    // ── Tier 2: Agent orchestrators (decompose + review) ──────────────────
     DECOMPOSE: {
       id: 'DECOMPOSE',
       executor: agent('admin'),
       produces: 'issue_documents',
-      transitions: { on_success: 'PRE_CODE', on_fail: 'escalate', on_stuck: 'CLAUDE_REVIEW' },
+      transitions: {
+        on_success: 'PRE_CODE',
+        on_fail: 'escalate',
+        // Admin decomposition failure = architectural issue → Claude replans
+        on_big_stuck: 'CLAUDE_REVIEW',
+      },
     },
     PRE_CODE: {
       id: 'PRE_CODE',
       executor: agent('critic'),
       produces: 'critique',
-      transitions: { on_success: 'CODE', on_fail: 'route:admin', on_stuck: 'CLAUDE_REVIEW' },
+      transitions: {
+        on_success: 'CODE',
+        on_fail: 'route:admin',
+        // Critic blocking repeatedly = plan itself is wrong → Claude replans
+        on_big_stuck: 'CLAUDE_REVIEW',
+      },
     },
+    // ── Tier 3: Executors (code + verify) ────────────────────────────────
     CODE: {
       id: 'CODE',
       executor: agent('coder'),
       gate: 'critique',
       produces: 'pull_request',
-      transitions: { on_success: 'TEST', on_fail: 'DECOMPOSE', on_stuck: 'CLAUDE_REVIEW' },
+      transitions: {
+        on_success: 'TEST',
+        on_fail: 'DECOMPOSE',
+        // Code fails but might be fixable → agent-level re-decompose (small stuck)
+        on_small_stuck: 'DECOMPOSE',
+        // Code keeps failing → architecture issue → Claude replans (big stuck)
+        on_big_stuck: 'CLAUDE_REVIEW',
+      },
     },
     TEST: {
       id: 'TEST',
       executor: op('test'),
       produces: 'test_result',
-      transitions: { on_success: 'VIDEO', on_fail: 'route:coder', on_stuck: 'CLAUDE_REVIEW' },
+      transitions: {
+        on_success: 'VIDEO',
+        on_fail: 'route:coder',
+        // Test fails → coder fixes it (small stuck)
+        on_small_stuck: 'route:coder',
+        // Test keeps failing → deeper issue → Claude replans
+        on_big_stuck: 'CLAUDE_REVIEW',
+      },
     },
     VIDEO: {
       id: 'VIDEO',
       executor: op('video'),
       produces: 'video_verdicts',
-      transitions: { on_success: 'ACCURACY', on_fail: 'route:coder', on_stuck: 'CLAUDE_REVIEW' },
+      transitions: {
+        on_success: 'ACCURACY',
+        on_fail: 'route:coder',
+        // Video fails → coder fixes (small stuck)
+        on_small_stuck: 'route:coder',
+        // Video keeps failing → Claude replans
+        on_big_stuck: 'CLAUDE_REVIEW',
+      },
     },
     ACCURACY: {
       id: 'ACCURACY',
@@ -107,15 +153,26 @@ const improvementLoop: WorkflowDef = {
       transitions: {
         on_success: 'REPORT',
         below_target: { target: 'ANALYSE', carry: ['accuracy_report'] },
-        on_stuck: 'CLAUDE_REVIEW',
+        // Accuracy below target is already a replan trigger (routes to ANALYSE)
+        on_big_stuck: 'CLAUDE_REVIEW',
       },
     },
-    /** Claude reviews a stuck/failed stage and hands Admin the rework directive. */
+    // ── Tier 1 recovery: Claude reviews + replans ────────────────────────
+    /** Claude reviews a stuck/failed stage and hands Admin the rework directive.
+     *  On success: if stuck_stage was a Tier 2 issue, route rework to admin (small recovery).
+     *  If the review itself fails or replan flag is set: go back to ANALYSE for full replan. */
     CLAUDE_REVIEW: {
       id: 'CLAUDE_REVIEW',
       executor: agent('claude'),
       produces: 'stuck_analysis',
-      transitions: { on_success: 'end', on_fail: 'escalate' },
+      transitions: {
+        // Claude analysis done → admin gets rework directive (stays in current loop)
+        on_success: 'DECOMPOSE',
+        // Claude review fails → escalate to human
+        on_fail: 'escalate',
+        // Claude says "needs full replan" → back to Tier 1 planning
+        on_big_stuck: 'ANALYSE',
+      },
     },
     REPORT: {
       id: 'REPORT',

@@ -166,21 +166,67 @@ async function applyResult(run: WorkflowRun, def: WorkflowDef, stage: Stage, tas
     return advanceTo(run, def, stage.transitions.on_success, `${stage.id} ok`);
   }
   const reason = `stage ${stage.id} failed: ${output.slice(0, 400) || (task.last_error ?? 'no output')}`;
-  // Stuck → top-tier review: a failed stage routes to Claude, whose analysis becomes the Admin
-  // rework directive (see advanceRun's CLAUDE_REVIEW handling). Cap the loop: after 2 reviews the
-  // run escalates instead of cycling between executor and reviewer.
-  const stuckTarget = stage.transitions.on_stuck;
-  if (stuckTarget) {
-    const count = (run.carry.stuck_count as number | undefined) ?? 0;
-    if (count >= 2) {
+
+  // ── Two-tier stuck escalation ──────────────────────────────────────────
+  // Small stuck: Tier 3 executor fails → Tier 2 agent-level retry (local fix).
+  // Big stuck:   Tier 2 agent fails or repeated small stuck → Tier 1 Claude replan.
+  const smallStuckTarget = stage.transitions.on_small_stuck;
+  const bigStuckTarget = stage.transitions.on_big_stuck;
+  const legacyStuckTarget = stage.transitions.on_stuck; // backward compat
+
+  if (smallStuckTarget || bigStuckTarget || legacyStuckTarget) {
+    const smallCount = (run.carry.small_stuck_count as number | undefined) ?? 0;
+    const bigCount = (run.carry.big_stuck_count as number | undefined) ?? 0;
+
+    // If the stage has explicit tier routing, use it; otherwise fall back to legacy on_stuck
+    if (smallStuckTarget || bigStuckTarget) {
+      // Escalate to big stuck if: (a) stage declares big_stuck AND (b) small retries exhausted
+      const smallRetriesExhausted = smallCount >= 2;
+      const useBigStuck = bigStuckTarget && (smallRetriesExhausted || !smallStuckTarget);
+
+      if (useBigStuck) {
+        // ── Big stuck: route to Tier 1 (Claude) for full replan ──────────
+        const totalBig = bigCount + 1;
+        if (totalBig >= 3) {
+          await createEscalation({ taskId: task.id, reason: `big stuck cap reached on ${stage.id}: ${reason}`, toAgent: 'admin' });
+          await updateWorkflowRun(run.id, { status: 'halted', currentStage: null, error: `big stuck cap reached: ${reason}` });
+          return post('ESCALATE', `big stuck cap (${totalBig}) on ${stage.id} — escalated: ${reason}`, run);
+        }
+        await updateWorkflowRun(run.id, {
+          carry: { ...run.carry, big_stuck_count: totalBig, small_stuck_count: 0, stuck_stage: stage.id, stuck_reason: reason },
+        });
+        await post('BIG-STUCK', `stage ${stage.id} big stuck (${totalBig}) → Claude replan`, run);
+        return advanceTo(run, def, bigStuckTarget, `stage ${stage.id} big stuck → ${bigStuckTarget}`);
+      }
+
+      // ── Small stuck: route to Tier 2 agent for local fix ───────────────
+      const totalSmall = smallCount + 1;
+      await updateWorkflowRun(run.id, {
+        carry: { ...run.carry, small_stuck_count: totalSmall, stuck_stage: stage.id, stuck_reason: reason },
+      });
+      await post('SMALL-STUCK', `stage ${stage.id} small stuck (${totalSmall}) → agent retry`, run);
+      // route: targets are handled below (routeTo); direct stage targets use advanceTo
+      if (smallStuckTarget && smallStuckTarget.startsWith('route:')) {
+        return routeTo(run, def, stage, smallStuckTarget.split(':')[1]!, reason);
+      }
+      if (smallStuckTarget) {
+        return advanceTo(run, def, smallStuckTarget, `stage ${stage.id} small stuck → ${smallStuckTarget}`);
+      }
+      // Fallback: if no small target defined, use legacy stuck behavior
+      return advanceTo(run, def, stage.transitions.on_stuck ?? 'escalate', `stage ${stage.id} small stuck → fallback`);
+    }
+
+    // Legacy on_stuck fallback (backward compat for stages without tier split)
+    const legacyCount = (run.carry.stuck_count as number | undefined) ?? 0;
+    if (legacyCount >= 2) {
       await createEscalation({ taskId: task.id, reason: `stuck cap reached on ${stage.id}: ${reason}`, toAgent: 'admin' });
       await updateWorkflowRun(run.id, { status: 'halted', currentStage: null, error: `stuck cap reached: ${reason}` });
-      return post('ESCALATE', `stuck cap (${count}) on ${stage.id} — escalated: ${reason}`, run);
+      return post('ESCALATE', `stuck cap (${legacyCount}) on ${stage.id} — escalated: ${reason}`, run);
     }
     await updateWorkflowRun(run.id, {
-      carry: { ...run.carry, stuck_count: count + 1, stuck_stage: stage.id, stuck_reason: reason },
+      carry: { ...run.carry, stuck_count: legacyCount + 1, stuck_stage: stage.id, stuck_reason: reason },
     });
-    return advanceTo(run, def, stuckTarget, `stage ${stage.id} stuck → ${stuckTarget}`);
+    return advanceTo(run, def, legacyStuckTarget!, `stage ${stage.id} stuck → ${legacyStuckTarget}`);
   }
   if (failTarget.startsWith('route:')) {
     return routeTo(run, def, stage, failTarget.split(':')[1]!, reason);
@@ -306,7 +352,8 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
 
   // Claude stuck review (CLAUDE_REVIEW): a failed stage routed here with stuck_stage in the carry.
   // Claude analyses the failure; its verdict becomes the Admin rework directive on the stuck stage
-  // — Claude decides, Admin schedules. If Claude's own review fails, the run halts.
+  // — Claude decides, Admin schedules. If Claude's review fails, the run halts.
+  // If Claude signals "needs full replan", the loop goes back to ANALYSE (Tier 1 replan).
   if (stage.executor.kind === 'agent' && stage.executor.role === 'claude' && run.carry.stuck_stage) {
     const task = await getStageTask(run.id, stageId);
     if (!task) {
@@ -319,10 +366,28 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
       const stuckReason = String(run.carry.stuck_reason ?? '');
       const stuck = def.stages[stuckId];
       await markTaskBlocked(task.id); // consume the review marker so it never re-fires
+
+      // Detect if Claude is requesting a full replan vs. a targeted rework.
+      // Claude signals replan by including [REPLAN] or "full replan" in its analysis,
+      // or when the big_stuck_count is high (repeated failures = need fresh approach).
+      const bigCount = (run.carry.big_stuck_count as number | undefined) ?? 0;
+      const wantsReplan = /\[REPLAN\]|full\s+replan|restart\s+from\s+analysis/i.test(analysis) || bigCount >= 2;
+
       await updateWorkflowRun(run.id, {
-        carry: { ...run.carry, stuck_stage: undefined, stuck_reason: undefined },
+        carry: { ...run.carry, stuck_stage: undefined, stuck_reason: undefined, small_stuck_count: 0 },
         error: null,
       });
+
+      if (wantsReplan) {
+        // ── Big stuck recovery: Claude says "replan" → back to Tier 1 ANALYSE ──
+        await updateWorkflowRun(run.id, {
+          carry: { ...run.carry, replan_reason: analysis.slice(0, 2000) },
+        });
+        await post('REPLAN', `Claude review requests full replan → back to ANALYSE`, run);
+        return advanceTo(run, def, 'ANALYSE', 'claude review → full replan from ANALYSE');
+      }
+
+      // ── Small stuck recovery: Claude analysis → Admin rework on the stuck stage ──
       if (!stuck) {
         await updateWorkflowRun(run.id, { status: 'halted', currentStage: null, error: `claude review of unknown stage ${stuckId}` });
         return;
@@ -333,6 +398,7 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
     }
     if (task.status === 'failed' || task.status === 'blocked') {
       const output = await getRunOutputText(task.id);
+      // Claude review itself failed → escalate (can't recover without Tier 1)
       await updateWorkflowRun(run.id, {
         status: 'halted',
         currentStage: null,
