@@ -50,6 +50,10 @@ Your hermes was failing (`nvidia/nemotron-3.5-lightning:free` via OpenRouter exi
   `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | ? { $_.CommandLine -like '*daemon*' -or $_.CommandLine -like '*gateway*' } | Select ProcessId, CommandLine` → `taskkill /F /T /PID <each>`.
 - Start ONE daemon: `npx tsx apps/daemon/src/daemon.ts`.
 - Start your gateway (dual-peer is correct): `npx tsx apps/bridge/src/gateway.ts`. One gateway per machine.
+- (Optional) Start a dispatcher: `npx tsx apps/dispatcher/src/dispatcher.ts`. Safe to run on both machines
+  now — a **singleton lease** makes only one ACTIVE at a time (the other logs STANDBY and takes over if the
+  active one dies). **But kill any OLD dispatcher first** (`dist/dispatcher.js` or a pre-lease one) — it
+  ignores the lease and will double-create workflow stage tasks.
 
 ## 7. Verify
 - Daemon logs `online as worker-... — roles: …`. Gateway logs `online …` with the 10 bot ids, no

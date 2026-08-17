@@ -32,9 +32,11 @@ import {
   getGateForRun,
   createEscalation,
   enqueuePost,
+  acquireLease,
   type WorkflowRun,
   type WorkflowTask,
 } from '@vto-swarm/db';
+import { hostname } from 'node:os';
 import { loadSecrets, loadChannelIds } from './config.js';
 import { WORKFLOWS, type Stage, type WorkflowDef } from './workflows.js';
 
@@ -43,6 +45,10 @@ const CHANNELS = loadChannelIds();
 const HUMAN_GATE_CHANNEL = CHANNELS['swarm-human-gate'] ?? '';
 const INCIDENTS_CHANNEL = CHANNELS['swarm-incidents'] ?? '';
 const LOG_TO_SLACK = true; // agents + workflow progress post to Slack — the user watches there, not a terminal
+// Dispatcher singleton: only the lease holder processes workflows (two would double-create stage tasks).
+const DISPATCHER_HOLDER = `${process.platform}-${hostname()}-${process.pid}`;
+const LEASE_TTL_SECS = 30;
+let holdsLease = false;
 
 const PASS_RE = /\bPASS(ED)?\b/i;
 
@@ -493,6 +499,13 @@ async function intake(): Promise<void> {
 }
 
 async function tick(): Promise<void> {
+  // Singleton guard: only the lease holder advances workflows; standbys idle until the holder dies.
+  const held = await acquireLease('dispatcher', DISPATCHER_HOLDER, LEASE_TTL_SECS);
+  if (!held) {
+    if (holdsLease) { console.log('[dispatcher] -> STANDBY (another dispatcher holds the lease)'); holdsLease = false; }
+    return;
+  }
+  if (!holdsLease) { console.log('[dispatcher] -> ACTIVE (holding the singleton lease)'); holdsLease = true; }
   await intake();
   for (const run of await listActiveWorkflowRuns()) {
     try {

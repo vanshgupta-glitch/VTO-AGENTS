@@ -54,7 +54,8 @@ interface TaskPayload {
   file?: string;
   loop?: boolean;
   fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
-  pinnedMachine?: string; // loop origin key — pins the whole chain to one machine (code-edit+build+deploy)
+  pinnedMachine?: string; // HARD pin — the chain runs ONLY on this machine (Slack work + the code loop)
+  preferMachine?: string; // SOFT pin — this machine's agents get first dibs; overflow to others after a grace
 }
 
 /**
@@ -128,7 +129,8 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
   const carry = {
     channel: task.channel,
     requestedBy: 'loop',
-    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount, pinnedMachine: p.pinnedMachine },
+    // A loop is single-machine: hard-pin the whole chain to its origin (or to THIS machine if unset).
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount, pinnedMachine: p.pinnedMachine ?? MACHINE_KEY, preferMachine: p.preferMachine },
   };
   switch (task.kind) {
     // improve = a hermes agent in the repo cwd; it EDITS the files directly, then → build.
@@ -150,7 +152,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
         requestedBy: 'loop',
         role: 'admin',
         kind: 'report',
-        payload: { loop: false, text: reportPrompt, ts: p.ts, pinnedMachine: p.pinnedMachine },
+        payload: { loop: false, text: reportPrompt, ts: p.ts, pinnedMachine: p.pinnedMachine ?? MACHINE_KEY },
       });
       break;
     }
@@ -189,7 +191,7 @@ async function chainOnFailure(task: Task, failureText: string): Promise<void> {
     requestedBy: 'loop',
     role: 'coder',
     kind: 'fix',
-    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1, pinnedMachine: p.pinnedMachine },
+    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1, pinnedMachine: p.pinnedMachine ?? MACHINE_KEY },
   });
 }
 
