@@ -24,6 +24,8 @@ import { runRuntime, type WorkerDef } from './runtimes.js';
 loadSecrets();
 const machine = loadMachine();
 const MACHINE_ID = machine.machineId ?? `worker-${process.platform}-${hostname()}`;
+// Stable per-host key for machine-pinning (loop affinity) — matches the gateway's key on the same host.
+const MACHINE_KEY = `${process.platform}-${hostname()}`;
 const inFlight = new Map<string, number>();
 
 const workerId = (w: WorkerDef): string => `${MACHINE_ID}:${w.role}`;
@@ -35,6 +37,7 @@ interface TaskPayload {
   file?: string;
   loop?: boolean;
   fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
+  pinnedMachine?: string; // loop origin key — pins the whole chain to one machine (code-edit+build+deploy)
 }
 
 /**
@@ -91,7 +94,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
   const carry = {
     channel: task.channel,
     requestedBy: 'loop',
-    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount },
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount, pinnedMachine: p.pinnedMachine },
   };
   switch (task.kind) {
     // improve = a hermes agent in the repo cwd; it EDITS the files directly, then → build.
@@ -113,7 +116,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
         requestedBy: 'loop',
         role: 'admin',
         kind: 'report',
-        payload: { loop: false, text: reportPrompt, ts: p.ts },
+        payload: { loop: false, text: reportPrompt, ts: p.ts, pinnedMachine: p.pinnedMachine },
       });
       break;
     }
@@ -152,7 +155,7 @@ async function chainOnFailure(task: Task, failureText: string): Promise<void> {
     requestedBy: 'loop',
     role: 'coder',
     kind: 'fix',
-    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1 },
+    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1, pinnedMachine: p.pinnedMachine },
   });
 }
 
@@ -213,7 +216,7 @@ async function tick(): Promise<void> {
     const id = workerId(w);
     const active = inFlight.get(id) ?? 0;
     if (active >= w.maxConcurrent) continue;
-    const task = await claimTask(w.role, id, MACHINE_ID);
+    const task = await claimTask(w.role, id, MACHINE_ID, MACHINE_KEY);
     if (!task) continue;
     inFlight.set(id, active + 1);
     console.log(`[daemon] ${w.role} claimed task ${task.id}`);

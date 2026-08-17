@@ -72,7 +72,7 @@ async function createStageWork(run: WorkflowRun, stage: Stage): Promise<number> 
     stage: stage.id,
     role: stage.executor.kind === 'agent' ? stage.executor.role : stage.executor.op,
     kind: stage.executor.kind === 'operation' ? stage.executor.op : stage.id.toLowerCase(),
-    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel },
+    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel, pinnedMachine: run.carry['pinnedMachine'] },
     needsCritique: stage.gate === 'critique',
     channel: run.channel,
   });
@@ -283,13 +283,15 @@ async function intake(): Promise<void> {
   for (let i = 0; i < 5; i++) {
     const trig = await claimWorkflowTrigger();
     if (!trig) break;
-    const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string };
+    const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string; pinnedMachine?: string };
     const wf = typeof p.workflow === 'string' && p.workflow in WORKFLOWS ? p.workflow : 'improvement-loop';
     const run = await createWorkflowRun({
       workflow: wf,
       goal: p.goal ?? (trig.requested_by ? `triggered by ${trig.requested_by}` : 'no goal'),
       channel: trig.channel ?? p.channel ?? null,
     });
+    // Pin the whole workflow to its origin machine (the gateway that ingested the Slack trigger).
+    if (p.pinnedMachine) await updateWorkflowRun(run.id, { carry: { ...run.carry, pinnedMachine: p.pinnedMachine } });
     await finishTrigger(trig.id, run.id);
     await post('START', `${wf} started — run #${run.id}`, run);
     console.log(`[dispatcher] run #${run.id} ${wf} started (trigger task #${trig.id})`);

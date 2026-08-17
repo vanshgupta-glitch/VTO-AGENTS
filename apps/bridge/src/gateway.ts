@@ -25,6 +25,8 @@ import { loadSecrets, AGENTS, type AgentKey } from './config.js';
 
 const secrets = loadSecrets();
 const MACHINE_ID = `gateway-${process.platform}-${hostname()}`;
+// Per-host key for pinning a Slack-initiated loop to THIS gateway's machine (matches the daemon key).
+const MACHINE_KEY = `${process.platform}-${hostname()}`;
 const AGENT_KEYS = Object.keys(AGENTS) as AgentKey[];
 const webClients = new Map<AgentKey, WebClient>();
 
@@ -101,7 +103,7 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
     await enqueueTask({
       role: 'admin',
       kind: 'workflow',
-      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel },
+      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel, pinnedMachine: MACHINE_KEY },
       channel: event.channel ?? null,
       requestedBy: event.user ?? null,
     });
