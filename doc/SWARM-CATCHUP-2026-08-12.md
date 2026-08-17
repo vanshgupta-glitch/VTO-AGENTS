@@ -51,14 +51,24 @@ suggestions. The cheap `improve` step (hermes) plans; OpenClaw implements. It ru
 OpenClaw also handles **fix-on-failure**: if `build`/`test`/`video` fails, the error is routed to OpenClaw
 to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
 
-Because `config/machine.local.json` is git-ignored (per-machine), **you must add the worker on your
-machine** or `implement` tasks are never claimed and the loop stalls after `improve`:
+OpenClaw is invoked as `openclaw agent --local --agent <id> --message-file <f>` (runtimes.ts). The
+`<id>` must be an **OpenClaw agent whose workspace IS this machine's `rkumar-vto`**, or it edits the
+wrong tree / fails. One-time setup on your machine:
 
-```json
-{ "role": "openclaw", "runtime": "openclaw", "agent": "coder", "maxConcurrent": 1 }
+```
+openclaw agents add vto-coder-<you> --workspace "<abs path to your rkumar-vto>" --model anthropic/claude-haiku-4-5 --non-interactive
 ```
 
-Add it to the `workers` array, and confirm `runtimes.openclaw` points at your `openclaw.ps1`.
+Then, because `config/machine.local.json` is git-ignored (per-machine), add the worker with THAT agent
+id (or `implement`/`fix` tasks are never claimed and the loop stalls after `improve`):
+
+```json
+{ "role": "openclaw", "runtime": "openclaw", "agent": "vto-coder-<you>", "maxConcurrent": 1 }
+```
+
+Confirm `runtimes.openclaw` points at your `openclaw.ps1`, and `openclaw models status` shows the
+claude-cli/Anthropic provider authed (`--local` needs it). Rohit's agent = `vto-coder-rohit`; the shared
+`vto-coder` points at Vansh's OneDrive path — don't reuse it cross-machine.
 
 ## File manifest (vault-root-relative)
 

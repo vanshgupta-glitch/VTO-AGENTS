@@ -27,7 +27,7 @@ export interface WorkerDef {
 
 export type RuntimePaths = Partial<Record<RuntimeName, string>>;
 
-const TIMEOUT_MS = 300_000;
+const TIMEOUT_MS = 600_000; // agentic runtimes (hermes profiles, openclaw) need room on complex tasks
 const MAX_BUFFER = 20 * 1024 * 1024;
 
 /** Run the task's prompt on the worker's runtime; returns trimmed stdout. Throws on failure. */
@@ -62,11 +62,13 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
     const dir = mkdtempSync(join(tmpdir(), 'swarm-'));
     const pf = join(dir, 'prompt.txt');
     writeFileSync(pf, prompt, 'utf8');
-    const { stdout } = await execFileP(
-      'powershell.exe',
-      ['-NoProfile', '-File', bin, '--agent', w.agent ?? w.role, '--prompt-file', pf],
-      opts,
-    );
+    // OpenClaw CLI: the `agent` subcommand, run embedded (--local), targeting an agent id whose
+    // workspace IS the repo under test. (The old `--agent <name> --prompt-file` form was invalid —
+    // openclaw parsed the agent name as a command: "Unknown command: openclaw coder".)
+    const args = ['-NoProfile', '-File', bin, 'agent', '--local', '--agent', w.agent ?? w.role,
+      '--message-file', pf, '--timeout', '580'];
+    if (w.model) args.push('--model', w.model);
+    const { stdout } = await execFileP('powershell.exe', args, opts);
     return stripAnsi(stdout).trim();
   }
   throw new Error(`unknown runtime ${String(w.runtime)}`);
