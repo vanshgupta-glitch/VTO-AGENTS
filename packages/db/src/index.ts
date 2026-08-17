@@ -108,9 +108,18 @@ export async function heartbeatMachine(id: string): Promise<void> {
  */
 const CLAIM_VT = Number(process.env.SWARM_CLAIM_VT) || 900;
 
-/** Put a task's id onto its role queue so a worker (either machine) can claim it via pgmq. */
-async function sendToQueue(role: string, taskId: number): Promise<void> {
-  await getPool().query(`select vto_send($1, $2)`, [role, taskId]);
+/**
+ * Queue "role" for a task. A PINNED task (pinKey set) gets a per-machine queue `<role>__<key>` that
+ * ONLY that machine reads — used to keep a loop (code-edit → build → deploy) on its ORIGIN machine.
+ * Unpinned tasks use the shared `<role>` queue (cross-machine overflow, the default).
+ */
+function queueRole(role: string, pinKey?: string | null): string {
+  return pinKey ? `${role}__${pinKey.replace(/[^a-zA-Z0-9_]/g, '_')}` : role;
+}
+
+/** Put a task's id onto its (possibly machine-pinned) role queue for a worker to claim via pgmq. */
+async function sendToQueue(role: string, taskId: number, pinKey?: string | null): Promise<void> {
+  await getPool().query(`select vto_send($1, $2)`, [queueRole(role, pinKey), taskId]);
 }
 
 export async function enqueueTask(t: {
@@ -139,9 +148,10 @@ export async function enqueueTask(t: {
     ],
   );
   const id = r.rows[0]!.id;
+  const pin = typeof t.payload?.['pinnedMachine'] === 'string' ? (t.payload['pinnedMachine'] as string) : null;
   // Only claimable tasks go on the queue: workflow triggers are the dispatcher's own intake
   // (claimWorkflowTrigger), and a critique-gated task waits until setCritiquePassed() opens it.
-  if (t.kind !== 'workflow' && !(t.needsCritique ?? false)) await sendToQueue(t.role, id);
+  if (t.kind !== 'workflow' && !(t.needsCritique ?? false)) await sendToQueue(t.role, id, pin);
   return id;
 }
 
@@ -151,15 +161,19 @@ export async function enqueueTask(t: {
  * row. Code tasks (`needs_critique`) stay invisible until a passing critique lands (D-005).
  * The caller must ensure the worker has a free slot (active < max_concurrent) before calling.
  */
-export async function claimTask(role: string, workerId: string, machineId: string): Promise<Task | null> {
+export async function claimTask(role: string, workerId: string, machineId: string, pinKey?: string): Promise<Task | null> {
   const client = await getPool().connect();
   try {
-    // Read one ready message off the role's pgmq queue; it becomes invisible for CLAIM_VT s (the claim).
-    // This runs in autocommit (before `begin`), so the visibility timeout is committed immediately.
-    const m = await client.query<{ msg_id: string; task_id: string }>(
-      `select msg_id, task_id from vto_read($1, $2)`,
-      [role, CLAIM_VT],
-    );
+    // Read THIS machine's PINNED queue first (loop tasks pinned here), then the shared role queue.
+    // Each read makes its message invisible for CLAIM_VT s (the claim). Runs in autocommit (before
+    // `begin`), so the visibility timeout commits immediately.
+    let qRole = queueRole(role, pinKey);
+    let m: { rows: { msg_id: string; task_id: string }[] } = { rows: [] };
+    if (pinKey) m = await client.query<{ msg_id: string; task_id: string }>(`select msg_id, task_id from vto_read($1, $2)`, [qRole, CLAIM_VT]);
+    if (!m.rows[0]) {
+      qRole = role;
+      m = await client.query<{ msg_id: string; task_id: string }>(`select msg_id, task_id from vto_read($1, $2)`, [role, CLAIM_VT]);
+    }
     const row = m.rows[0];
     if (!row) return null;
     const { msg_id: msgId, task_id: taskId } = row;
@@ -167,10 +181,10 @@ export async function claimTask(role: string, workerId: string, machineId: strin
     await client.query('begin');
     const tr = await client.query<Task>(`select * from tasks where id = $1 for update`, [taskId]);
     const task = tr.rows[0] ?? null;
-    // Stale/duplicate message — the task is gone or already terminal: ack and skip (don't re-run).
+    // Stale/duplicate message — the task is gone or already terminal: ack (on the queue we read) and skip.
     if (!task || task.status === 'done' || task.status === 'blocked' || task.status === 'cancelled') {
       await client.query('commit');
-      await getPool().query(`select vto_ack($1, $2)`, [role, msgId]);
+      await getPool().query(`select vto_ack($1, $2)`, [qRole, msgId]);
       return null;
     }
     // A redelivered message (task still 'claimed'/'running' from a dead worker) is re-claimable — that
@@ -204,8 +218,9 @@ export async function finishTask(
     await client.query('begin');
     // Grab the pgmq msg_id + role for this claim BEFORE closing the run, so we can ack the exact
     // message after committing (a crash before this point leaves the message for pgmq to redeliver).
-    const info = await client.query<{ msg_id: string | null; role: string }>(
-      `select r.msg_id, t.role from runs r join tasks t on t.id = r.task_id
+    const info = await client.query<{ msg_id: string | null; role: string; pin: string | null }>(
+      `select r.msg_id, t.role, (t.payload->>'pinnedMachine') as pin
+       from runs r join tasks t on t.id = r.task_id
        where r.task_id = $1 and r.status = 'running' order by r.id desc limit 1`,
       [taskId],
     );
@@ -228,7 +243,7 @@ export async function finishTask(
     // Terminal outcome → remove the message from the queue. A crash never reaches here, so the message
     // stays invisible only until CLAIM_VT elapses, then pgmq redelivers it (the automatic recovery).
     const done = info.rows[0];
-    if (done?.msg_id) await getPool().query(`select vto_ack($1, $2)`, [done.role, done.msg_id]);
+    if (done?.msg_id) await getPool().query(`select vto_ack($1, $2)`, [queueRole(done.role, done.pin), done.msg_id]);
   } catch (e) {
     await client.query('rollback');
     throw e;
@@ -535,8 +550,9 @@ export async function createStageTask(t: {
     ],
   );
   const id = r.rows[0]!.id;
+  const pin = typeof t.payload?.['pinnedMachine'] === 'string' ? (t.payload['pinnedMachine'] as string) : null;
   // Stage tasks are claimable immediately unless critique-gated (then setCritiquePassed opens them).
-  if (!(t.needsCritique ?? false)) await sendToQueue(t.role, id);
+  if (!(t.needsCritique ?? false)) await sendToQueue(t.role, id, pin);
   return id;
 }
 
@@ -596,7 +612,7 @@ export async function claimWorkflowTrigger(): Promise<Task | null> {
 export async function finishTrigger(taskId: number, runId: number): Promise<void> {
   await getPool().query(
     `update tasks set status = 'done', updated_at = now(),
-       payload = payload || jsonb_build_object('workflow_run_id', $2)
+       payload = payload || jsonb_build_object('workflow_run_id', $2::bigint)
      where id = $1`,
     [taskId, runId],
   );
@@ -626,13 +642,14 @@ export async function recordCritique(c: {
 }
 
 export async function setCritiquePassed(taskId: number): Promise<void> {
-  const r = await getPool().query<{ role: string; kind: string }>(
-    `update tasks set critique_passed = true, updated_at = now() where id = $1 returning role, kind`,
+  const r = await getPool().query<{ role: string; kind: string; pin: string | null }>(
+    `update tasks set critique_passed = true, updated_at = now() where id = $1
+     returning role, kind, (payload->>'pinnedMachine') as pin`,
     [taskId],
   );
-  // Gate is now open → make the task claimable by putting it on its role queue.
+  // Gate is now open → make the task claimable by putting it on its (possibly pinned) role queue.
   const row = r.rows[0];
-  if (row && row.kind !== 'workflow') await sendToQueue(row.role, taskId);
+  if (row && row.kind !== 'workflow') await sendToQueue(row.role, taskId, row.pin);
 }
 
 /** Tombstone a task (e.g. a consumed rework marker) so it never re-fires. */

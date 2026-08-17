@@ -25,6 +25,8 @@ import { loadSecrets, loadChannelIds, AGENTS, type AgentKey } from './config.js'
 
 const secrets = loadSecrets();
 const MACHINE_ID = `gateway-${process.platform}-${hostname()}`;
+// Per-host key for pinning a Slack-initiated loop to THIS gateway's machine (matches the daemon key).
+const MACHINE_KEY = `${process.platform}-${hostname()}`;
 const AGENT_KEYS = Object.keys(AGENTS) as AgentKey[];
 const CHANNEL_IDS = loadChannelIds();
 const webClients = new Map<AgentKey, WebClient>();
@@ -102,7 +104,16 @@ async function maybeAutoTrigger(event: SlackEvent): Promise<void> {
   await enqueueTask({
     role: 'admin',
     kind: 'workflow',
-    payload: { workflow: 'improvement-loop', goal: text, channel: event.channel, ts: event.ts },
+    // Pin here too: this is the other Slack-initiated way a loop starts, and an unpinned loop can
+    // have its code-edit and build stages claimed by different machines (4328176's whole point).
+    // The health-loop below is deliberately NOT pinned — it should fan out to every machine.
+    payload: {
+      workflow: 'improvement-loop',
+      goal: text,
+      channel: event.channel,
+      ts: event.ts,
+      pinnedMachine: MACHINE_KEY,
+    },
     channel: event.channel ?? null,
     requestedBy: event.user ?? null,
   });
@@ -127,7 +138,15 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
     await enqueueTask({
       role: 'admin',
       kind: 'workflow',
-      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel, ts: event.ts },
+      // `ts` keeps the whole run's replies threaded under the human's message; `pinnedMachine`
+      // keeps the chain on this host. Both are needed — upstream dropped `ts` here.
+      payload: {
+        workflow: 'improvement-loop',
+        goal: wfMatch[1].trim(),
+        channel: event.channel,
+        ts: event.ts,
+        pinnedMachine: MACHINE_KEY,
+      },
       channel: event.channel ?? null,
       requestedBy: event.user ?? null,
     });

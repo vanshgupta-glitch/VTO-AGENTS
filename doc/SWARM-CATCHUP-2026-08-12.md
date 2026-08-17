@@ -43,22 +43,56 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 6. Start your gateway too (dual-peer): `npx tsx apps/bridge/src/gateway.ts` — it's now safe to run on
    both machines. (Ping Rohit to make sure exactly one gateway per machine, two total.)
 
-## OpenClaw implement stage — REQUIRES a per-machine config addition
+## OpenClaw — OPT-IN complex-coding path (workspace-synced)
 
-The loop now inserts an `implement` stage run by **OpenClaw** (Claude haiku, agentic) between `improve`
-and `build` — OpenClaw edits the repo files directly, so the loop actually produces code, not just text
-suggestions. The cheap `improve` step (hermes) plans; OpenClaw implements. It runs with `cwd = repoPath`.
-OpenClaw also handles **fix-on-failure**: if `build`/`test`/`video` fails, the error is routed to OpenClaw
-to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
+**The default loop no longer uses OpenClaw.** The `improve` step is a hermes agent in the repo cwd — it
+**edits the files directly** (proven on a live run 2026-08-17; hermes has write tools and, unlike
+OpenClaw, doesn't scaffold), and `fix-on-failure` routes to a hermes `coder` in-repo. OpenClaw is now
+**opt-in for genuinely complex changes** — seed an `implement` task (role=openclaw). When used it runs
+via `openclaw agent --local --agent <id> --message-file <f>` with the workspace-sync below. **Critical:**
+an OpenClaw agent treats its
+`--workspace` as its OWN home — on first run it **scaffolds `SOUL.md`/`IDENTITY.md`/`AGENTS.md`/… and
+`git init`s that directory**. Pointing it at the live repo destroys it (learned live 2026-08-17: it
+polluted `rkumar-vto` + nested-`.git`-shadowed the real repo — recovered because `rkumar-vto` is a subdir
+of the `nmg-vto` repo whose `.git` was intact).
 
-Because `config/machine.local.json` is git-ignored (per-machine), **you must add the worker on your
-machine** or `implement` tasks are never claimed and the loop stalls after `improve`:
+**So the agent's workspace is a DEDICATED dir, and `runtimes.ts` mirrors code around each run:**
+1. `mirrorDirs(repo → workspace, SYNC_DIRS)` — robocopy `packages/`+`extensions/`+`app/` INTO the
+   workspace (excludes `node_modules`/`dist`/`build`/`.git`) so OpenClaw sees current code.
+2. run `openclaw agent --local --agent <id> …` with `cwd = workspace` (it edits there, scaffolds there).
+3. `mirrorDirs(workspace → repo, SYNC_DIRS)` — copy OpenClaw's edits BACK into the build repo so `build`
+   compiles them, and the human reviews the diff. Scaffolding stays in the workspace (SYNC_DIRS excludes root).
 
-```json
-{ "role": "openclaw", "runtime": "openclaw", "agent": "coder", "maxConcurrent": 1 }
-```
+**Per-machine setup:**
+- Create a dedicated-workspace agent (workspace **NOT** your repo): `openclaw agents add vto-coder-<you>
+  --workspace "C:/.../openclaw-ws/vto-coder-<you>" --model anthropic/claude-haiku-4-5 --non-interactive`.
+- Add the worker with the matching `workspace` field (git-ignored `machine.local.json`):
+  ```json
+  { "role": "openclaw", "runtime": "openclaw", "agent": "vto-coder-<you>", "workspace": "C:/.../openclaw-ws/vto-coder-<you>", "maxConcurrent": 1 }
+  ```
+- Confirm `openclaw models status` shows the claude-cli/Anthropic provider authed (`--local` needs it).
+- **⚠️ Vansh:** your existing `vto-coder` agent points at your LIVE `rkumar_vto`. Repoint its `workspace`
+  in `~/.openclaw/openclaw.json` to a throwaway dir BEFORE running it, or it will scaffold + `git init`
+  your repo. Never `openclaw agents delete` while a workspace is a real dir — it *prunes* (deletes) it.
 
-Add it to the `workers` array, and confirm `runtimes.openclaw` points at your `openclaw.ps1`.
+*(Caveat: the mirror is additive (robocopy `/E`, no delete), so a file OpenClaw DELETES won't propagate —
+fine for the edit/add changes the loop makes. Rohit's agent = `vto-coder-rohit`, workspace `~/openclaw-ws/`.)*
+
+Confirm `runtimes.openclaw` points at your `openclaw.ps1`, and `openclaw models status` shows the
+claude-cli/Anthropic provider authed (`--local` needs it). Rohit's agent = `vto-coder-rohit`; the shared
+`vto-coder` points at Vansh's OneDrive path — don't reuse it cross-machine.
+
+## Loop machine-affinity (the loop stays on its origin machine)
+
+The eng-loop (code-edit → build → deploy → …) must run on ONE machine (coherent repo). It's now **pinned
+to its origin** via per-machine pgmq queues:
+- A task with `payload.pinnedMachine=<key>` goes to queue `vto_<role>__<key>`; a daemon reads its OWN
+  pinned queue first, then the shared `vto_<role>`. So a pinned loop step can only be claimed by its
+  origin machine — Vansh's daemon won't steal a Rohit-pinned loop step (and vice-versa).
+- The `<key>` is the host key `${process.platform}-${hostname()}` (e.g. `win32-NMG-D-82`).
+- **Slack-initiated** loops (an `improve <goal>` / workflow trigger) are auto-pinned to the gateway's host.
+- **Direct-seeded** loops: set `payload.pinnedMachine` = the target machine's key when you seed the
+  `improve` task. Omit it and the task overflows (shared queue) — correct for one-off (non-loop) tasks.
 
 ## File manifest (vault-root-relative)
 

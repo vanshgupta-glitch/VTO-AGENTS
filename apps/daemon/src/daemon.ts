@@ -27,6 +27,8 @@ import { runRuntime, type WorkerDef } from './runtimes.js';
 loadSecrets();
 const machine = loadMachine();
 const MACHINE_ID = machine.machineId ?? `worker-${process.platform}-${hostname()}`;
+// Stable per-host key for machine-pinning (loop affinity) — matches the gateway's key on the same host.
+const MACHINE_KEY = `${process.platform}-${hostname()}`;
 const inFlight = new Map<string, number>();
 
 const workerId = (w: WorkerDef): string => `${MACHINE_ID}:${w.role}`;
@@ -52,6 +54,7 @@ interface TaskPayload {
   file?: string;
   loop?: boolean;
   fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
+  pinnedMachine?: string; // loop origin key — pins the whole chain to one machine (code-edit+build+deploy)
 }
 
 /**
@@ -110,10 +113,14 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
 
 /**
  * Advance the engineering loop on success (only for loop-tagged tasks). STRICTLY SEQUENTIAL so each
- * step sees the previous step's fresh output: improve→implement(OpenClaw)→build→deploy→video→accuracy→report. Accuracy
- * runs only after video, so it analyzes the video tester's just-written logs (not stale ones); it
- * then reports the verdict forward to admin (terminal in this simple chain — the workflow dispatcher
- * owns any below-target loop-back).
+ * step sees the previous step's fresh output: improve→build→deploy→video→accuracy→report. The improve
+ * step is a hermes agent running in the repo cwd — it EDITS the files directly (proven on simple
+ * changes; hermes has write tools and doesn't scaffold like OpenClaw). For genuinely complex work,
+ * seed an `implement` task (role=openclaw, workspace-synced) instead; it also →build. Accuracy runs
+ * only after video (fresh logs), then reports the verdict to admin (the workflow dispatcher owns any
+ * below-target loop-back).
+ * NOTE: the loop is single-machine — code-edit + build + deploy must run on the SAME machine (the one
+ * with the repo + operation workers). Don't rely on cross-machine overflow for the loop pipeline.
  */
 async function chainNext(task: Task, resultText: string): Promise<void> {
   const p = task.payload as TaskPayload;
@@ -121,22 +128,14 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
   const carry = {
     channel: task.channel,
     requestedBy: 'loop',
-    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount },
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount, pinnedMachine: p.pinnedMachine },
   };
   switch (task.kind) {
-    case 'improve': {
-      // improve produced the plan; hand it to OpenClaw (Claude haiku, agentic) to actually edit the repo.
-      const implementPrompt =
-        `Implement this VTO change directly in the repo - edit the files, keep it minimal and correct, ` +
-        `then briefly say what you changed:\n\n${resultText}`;
-      await enqueueTask({
-        channel: task.channel, requestedBy: 'loop', role: 'openclaw', kind: 'implement',
-        payload: { loop: true, text: implementPrompt, ts: p.ts, file: p.file },
-      });
-      break;
-    }
+    // improve = a hermes agent in the repo cwd; it EDITS the files directly, then → build.
+    case 'improve': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
+    // implement = OPT-IN OpenClaw path (workspace-synced) for complex changes; also → build.
     case 'implement': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
-    case 'fix': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break; // OpenClaw patched → re-verify from build
+    case 'fix': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break; // patched → re-verify from build
     case 'build': await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' }); break;
     case 'deploy': await enqueueTask({ ...carry, role: 'video', kind: 'video' }); break;
     case 'video': await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' }); break;
@@ -151,7 +150,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
         requestedBy: 'loop',
         role: 'admin',
         kind: 'report',
-        payload: { loop: false, text: reportPrompt, ts: p.ts },
+        payload: { loop: false, text: reportPrompt, ts: p.ts, pinnedMachine: p.pinnedMachine },
       });
       break;
     }
@@ -162,8 +161,9 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
 const MAX_FIX_ATTEMPTS = 2;
 
 /**
- * On a loop step failing, route the error to OpenClaw to diagnose + patch the repo, then re-enter the
- * loop at build. Only for steps a code patch can fix (build/test/video), and capped so it can't spin.
+ * On a loop step failing, route the error to a hermes `coder` agent (in the repo cwd) to diagnose +
+ * patch the repo, then re-enter the loop at build. Only for steps a code patch can fix (build/test/
+ * video), capped so it can't spin. (hermes edits in-repo directly and doesn't scaffold like OpenClaw.)
  */
 async function chainOnFailure(task: Task, failureText: string): Promise<void> {
   const p = task.payload as TaskPayload;
@@ -175,7 +175,7 @@ async function chainOnFailure(task: Task, failureText: string): Promise<void> {
       await enqueuePost({
         channel: task.channel,
         agent: 'admin',
-        text: `:octagonal_sign: loop halted at *${task.kind}* after ${fixCount} OpenClaw fix attempts — needs a human.`,
+        text: `:octagonal_sign: loop halted at *${task.kind}* after ${fixCount} fix attempts — needs a human.`,
         threadTs: p.ts ?? null,
       });
     }
@@ -187,9 +187,9 @@ async function chainOnFailure(task: Task, failureText: string): Promise<void> {
   await enqueueTask({
     channel: task.channel,
     requestedBy: 'loop',
-    role: 'openclaw',
+    role: 'coder',
     kind: 'fix',
-    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1 },
+    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1, pinnedMachine: p.pinnedMachine },
   });
 }
 
@@ -267,7 +267,7 @@ async function tick(): Promise<void> {
     const id = workerId(w);
     const active = inFlight.get(id) ?? 0;
     if (active >= w.maxConcurrent) continue;
-    const task = await claimTask(w.role, id, MACHINE_ID);
+    const task = await claimTask(w.role, id, MACHINE_ID, MACHINE_KEY);
     if (!task) continue;
     inFlight.set(id, active + 1);
     console.log(`[daemon] ${w.role} claimed task ${task.id}`);

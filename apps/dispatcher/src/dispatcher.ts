@@ -99,7 +99,14 @@ async function createStageWork(run: WorkflowRun, stage: Stage): Promise<number> 
     kind: stage.executor.kind === 'operation' ? stage.executor.op : stage.id.toLowerCase(),
     // `ts` = the originating Slack command's ts — the daemon posts every reply into that thread,
     // so the whole run reads as one conversation (0004_workflow_threads.sql).
-    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel, ts: run.thread_ts ?? null },
+    // `pinnedMachine` keeps every stage of the run on the machine that started it (4328176).
+    payload: {
+      text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra),
+      goal: run.goal,
+      channel: run.channel,
+      ts: run.thread_ts ?? null,
+      pinnedMachine: run.carry['pinnedMachine'],
+    },
     needsCritique: stage.gate === 'critique',
     channel: run.channel,
   });
@@ -194,11 +201,12 @@ async function handleCritiqueGate(run: WorkflowRun, def: WorkflowDef, stage: Sta
   // Gated task finished (it ran once passed) — apply normal result.
   if (gated.status === 'done' || gated.status === 'failed') {
     const output = await getRunOutputText(gated.id);
+    await markTaskBlocked(gated.id); // consume before applying the result
     return applyResult(run, def, stage, gated, gated.status === 'done', output);
   }
   if (gated.critique_passed) return; // unlocked; daemon will claim it
   const crit = await getStageTask(run.id, `${stage.id}:critic`);
-  if (!crit) {
+  if (!crit || crit.status === 'blocked') {
     await createStageTask({
       runId: run.id,
       stage: `${stage.id}:critic`,
@@ -218,10 +226,12 @@ async function handleCritiqueGate(run: WorkflowRun, def: WorkflowDef, stage: Sta
     if (isPass(verdict)) {
       await recordCritique({ taskId: gated.id, verdict: 'pass', notes: verdict.slice(0, 500), critic: 'critic' });
       await setCritiquePassed(gated.id);
+      await markTaskBlocked(crit.id); // tombstone the verdict; a re-entered stage spawns a fresh critic
       await post('CRITIQUE-PASS', `gate passed for task #${gated.id}`, run);
     } else {
       await recordCritique({ taskId: gated.id, verdict: 'block', notes: verdict.slice(0, 500), critic: 'critic' });
-      await markTaskBlocked(gated.id); // tombstone this attempt; rework spawns a fresh one
+      await markTaskBlocked(crit.id); // tombstone the verdict first
+      await markTaskBlocked(gated.id); // tombstone this attempt; re-entry spawns a fresh one
       const failTarget = stage.transitions.on_fail ?? 'escalate';
       const reason = `critique blocked: ${verdict.slice(0, 300)}`;
       await post('CRITIQUE-BLOCK', `gate blocked task #${gated.id} — ${failTarget}`, run);
@@ -346,7 +356,9 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
   }
 
   const task = await getStageTask(run.id, stageId);
-  if (!task) {
+  // A `blocked` task is a tombstone (consumed attempt or blocked gate): no active work exists,
+  // so spawn a fresh attempt. This is what lets a critique BLOCK loop back (PLAN→ANALYSE→…→PLAN).
+  if (!task || task.status === 'blocked') {
     const id = await createStageWork(run, stage);
     if (stage.gate === 'critique') {
       const gated = await getStageTask(run.id, stageId);
@@ -362,13 +374,16 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
     const output = await getRunOutputText(task.id);
     if (!output.trim()) {
       const emptyTarget = stage.transitions.on_empty ?? stage.transitions.on_fail ?? 'halt';
+      await markTaskBlocked(task.id); // consume so re-entry spawns a fresh attempt
       await post('EMPTY', `${stage.id} produced no output → ${emptyTarget}`, run);
       return advanceTo(run, def, emptyTarget, `${stage.id} empty`);
     }
+    await markTaskBlocked(task.id); // consume before advancing
     return applyResult(run, def, stage, task, true, output);
   }
-  if (task.status === 'failed' || task.status === 'blocked') {
+  if (task.status === 'failed') {
     const output = await getRunOutputText(task.id);
+    await markTaskBlocked(task.id); // consume before advancing
     return applyResult(run, def, stage, task, false, output || (task.last_error ?? 'failed'));
   }
   // queued / claimed / running → daemons are on it.
@@ -379,7 +394,13 @@ async function intake(): Promise<void> {
   for (let i = 0; i < 5; i++) {
     const trig = await claimWorkflowTrigger();
     if (!trig) break;
-    const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string; ts?: string };
+    const p = (trig.payload ?? {}) as {
+      workflow?: string;
+      goal?: string;
+      channel?: string;
+      ts?: string; // originating Slack ts → workflow_runs.thread_ts → every stage reply threads
+      pinnedMachine?: string; // origin machine key → every stage stays on that machine
+    };
     const wf = typeof p.workflow === 'string' && p.workflow in WORKFLOWS ? p.workflow : 'improvement-loop';
     const run = await createWorkflowRun({
       workflow: wf,
@@ -387,6 +408,8 @@ async function intake(): Promise<void> {
       channel: trig.channel ?? p.channel ?? null,
       threadTs: p.ts ?? null,
     });
+    // Pin the whole workflow to its origin machine (the gateway that ingested the Slack trigger).
+    if (p.pinnedMachine) await updateWorkflowRun(run.id, { carry: { ...run.carry, pinnedMachine: p.pinnedMachine } });
     await finishTrigger(trig.id, run.id);
     await post('START', `${wf} started — run #${run.id}`, run);
     console.log(`[dispatcher] run #${run.id} ${wf} started (trigger task #${trig.id})`);

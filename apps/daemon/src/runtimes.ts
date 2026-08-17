@@ -5,7 +5,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,14 +41,45 @@ export interface WorkerDef {
   profile?: string; // hermes
   model?: string; // claude / opencode
   agent?: string; // openclaw
+  workspace?: string; // openclaw: dedicated workspace dir (NEVER the live repo) — synced to/from repo
   op?: 'build' | 'lint' | 'test' | 'deploy' | 'video' | 'accuracy'; // runtime === 'operation'
   maxConcurrent: number;
 }
 
 export type RuntimePaths = Partial<Record<RuntimeName, string>>;
 
-const TIMEOUT_MS = 300_000;
+const TIMEOUT_MS = 600_000; // agentic runtimes (hermes profiles, openclaw) need room on complex tasks
 const MAX_BUFFER = 20 * 1024 * 1024;
+
+// Source dirs the OpenClaw workspace mirrors to/from the build repo (code only — not build artifacts).
+const SYNC_DIRS = ['packages', 'extensions', 'app'];
+
+/**
+ * Mirror source subdirs from `src` into `dst` with robocopy, excluding build artifacts + git. Used to
+ * sync the build repo <-> the OpenClaw agent's DEDICATED workspace around a run — OpenClaw scaffolds +
+ * git-inits its workspace, so it must NEVER be the live repo (see doc/SWARM-CATCHUP). robocopy exit
+ * codes 0-7 mean success (copied / nothing to do); >=8 is a real error.
+ */
+async function mirrorDirs(src: string, dst: string, dirs: string[]): Promise<void> {
+  const bs = (p: string): string => p.replace(/\//g, '\\');
+  for (const d of dirs) {
+    if (!existsSync(join(src, d))) continue;
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'robocopy',
+        [bs(join(src, d)), bs(join(dst, d)), '/E', '/XD', 'node_modules', 'dist', 'build', '.git',
+          '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/R:1', '/W:1'],
+        { timeout: 180_000, windowsHide: true, maxBuffer: MAX_BUFFER },
+        (err) => {
+          if (!err) return resolve();
+          const code = (err as NodeJS.ErrnoException & { code?: number | string }).code;
+          if (typeof code === 'number' && code < 8) return resolve(); // robocopy 0-7 = success
+          reject(new Error(`robocopy ${d} failed (code ${String(code)})`));
+        },
+      );
+    });
+  }
+}
 
 /** Run the task's prompt on the worker's runtime; returns trimmed stdout. Throws on failure. */
 export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePaths, cwd?: string): Promise<string> {
@@ -57,18 +88,11 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'hermes') {
     const bin = paths.hermes;
     if (!bin) throw new Error('hermes path not configured');
-    // `--ignore-rules` makes each task hermetic. hermes' one-shot mode documents that "tools,
-    // memory, rules, and AGENTS.md in the CWD are loaded as normal", and its built-in memory is
-    // "always active" — so a reply could persist a claim ("saved as a durable routing rule") and the
-    // NEXT unrelated task recalled it, answering the previous question instead of the new one.
-    // It also stops AGENTS.md/SOUL.md being picked up from cwd, which is the product repo here and
-    // therefore the wrong context entirely. Trade-off: preloaded skills are not injected either —
-    // every task must carry what it needs in the prompt the daemon builds, which is what we want.
-    const { stdout } = await execFileP(
-      bin,
-      ['-p', w.profile ?? w.role, '--ignore-rules', '-z', prompt],
-      opts,
-    );
+    // --ignore-rules: skip AGENTS.md/SOUL/memory/skills injection so the loop's LLM steps answer
+    // directly instead of doing multi-minute agentic file exploration (11s vs >5min, measured).
+    // It also fixes cross-task bleed: hermes' built-in memory is "always active", so a reply that
+    // claimed to "save a durable routing rule" was recalled by the NEXT unrelated task.
+    const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt, '--ignore-rules'], opts);
     return cleanReply(stdout, w.role);
   }
   if (w.runtime === 'claude') {
@@ -95,17 +119,23 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'openclaw') {
     const bin = paths.openclaw;
     if (!bin) throw new Error('openclaw path not configured');
+    const ws = w.workspace; // the agent's DEDICATED workspace (matches openclaw.json), never the repo
+    // Sync the build repo's source INTO the workspace so OpenClaw edits the current code.
+    if (ws && cwd) await mirrorDirs(cwd, ws, SYNC_DIRS);
     const dir = mkdtempSync(join(tmpdir(), 'swarm-'));
     const pf = join(dir, 'prompt.txt');
     writeFileSync(pf, prompt, 'utf8');
-    // `agent` is a SUBCOMMAND, and the flag is `--message-file`. Without the subcommand the CLI
-    // reads `--agent coder` as a command and dies with "Unknown command: openclaw coder"; there is
-    // no `--prompt-file` flag at all. Verified against OpenClaw 2026.7.1-2 (`openclaw agent --help`).
-    const { stdout } = await execFileP(
-      'powershell.exe',
-      ['-NoProfile', '-File', bin, 'agent', '--agent', w.agent ?? w.role, '--message-file', pf],
-      opts,
-    );
+    // OpenClaw CLI: the `agent` subcommand, embedded (--local), targeting an agent id. (The old
+    // `--agent <name> --prompt-file` form was invalid — openclaw read the name as a command.)
+    // `--local` matters beyond correctness: without it the turn is routed through the OpenClaw
+    // Gateway, which is where a daemon-spawned run hung to the timeout while the same command
+    // succeeded in 10-17s by hand.
+    const args = ['-NoProfile', '-File', bin, 'agent', '--local', '--agent', w.agent ?? w.role,
+      '--message-file', pf, '--timeout', '580'];
+    if (w.model) args.push('--model', w.model);
+    const { stdout } = await execFileP('powershell.exe', args, ws ? { ...opts, cwd: ws } : opts);
+    // Sync OpenClaw's edits back OUT of the workspace into the build repo so `build` compiles them.
+    if (ws && cwd) await mirrorDirs(ws, cwd, SYNC_DIRS);
     return cleanReply(stdout, w.role);
   }
   throw new Error(`unknown runtime ${String(w.runtime)}`);
