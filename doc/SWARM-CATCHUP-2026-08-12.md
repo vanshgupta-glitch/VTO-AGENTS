@@ -43,28 +43,29 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 6. Start your gateway too (dual-peer): `npx tsx apps/bridge/src/gateway.ts` — it's now safe to run on
    both machines. (Ping Rohit to make sure exactly one gateway per machine, two total.)
 
-## OpenClaw implement stage — REQUIRES a per-machine config addition
+## OpenClaw implement/fix — ⚠️ DISABLED pending a workspace redesign. Do NOT enable yet.
 
-The loop now inserts an `implement` stage run by **OpenClaw** (Claude haiku, agentic) between `improve`
-and `build` — OpenClaw edits the repo files directly, so the loop actually produces code, not just text
-suggestions. The cheap `improve` step (hermes) plans; OpenClaw implements. It runs with `cwd = repoPath`.
-OpenClaw also handles **fix-on-failure**: if `build`/`test`/`video` fails, the error is routed to OpenClaw
-to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
+The loop's `implement` (OpenClaw between `improve`→`build`) and `fix-on-failure` stages are wired
+(`chainNext`, `MAX_FIX_ATTEMPTS`), and the `runtimes.ts` adapter is now correct
+(`openclaw agent --local --agent <id> --message-file <f>`). **But the OpenClaw worker is REMOVED from
+config and must stay removed until the workspace model is fixed.**
 
-OpenClaw is invoked as `openclaw agent --local --agent <id> --message-file <f>` (runtimes.ts). The
-`<id>` must be an **OpenClaw agent whose workspace IS this machine's `rkumar-vto`**, or it edits the
-wrong tree / fails. One-time setup on your machine:
+**Why (learned live, 2026-08-17):** an OpenClaw agent treats its `--workspace` as its OWN home — on its
+first run it **scaffolds files (`SOUL.md`/`IDENTITY.md`/`AGENTS.md`/`TOOLS.md`/…) and `git init`s that
+directory**. Pointing an agent's workspace at the live `rkumar-vto` polluted the repo and created a nested
+`.git` shadowing the real one. (Recovered fully — `rkumar-vto` is a subdir of the `nmg-vto` repo, whose
+`.git` held the true history; deleting the nested `.git` + the scaffolding restored everything.)
 
-```
-openclaw agents add vto-coder-<you> --workspace "<abs path to your rkumar-vto>" --model anthropic/claude-haiku-4-5 --non-interactive
-```
+- **NEVER point an OpenClaw agent's workspace at your live repo.** Vansh's existing `vto-coder` agent
+  points at your live `rkumar_vto` — **repoint it to a throwaway dir** (edit `~/.openclaw/openclaw.json`
+  `agents.list[].workspace`) before running any OpenClaw agent, or it will scaffold + `git init` your repo.
+- Do **not** `openclaw agents delete <name>` while its workspace is a real dir — it *prunes the workspace*
+  (could delete your files). Repoint the workspace first, then delete if desired.
+- **Open design item:** for the implement/fix stages to edit the build repo safely, OpenClaw needs a
+  *dedicated* workspace (a clone/worktree of rkumar-vto) with changes synced back into the build tree —
+  not the live repo. Until that exists, leave the `openclaw` worker OUT of `machine.local.json`.
 
-Then, because `config/machine.local.json` is git-ignored (per-machine), add the worker with THAT agent
-id (or `implement`/`fix` tasks are never claimed and the loop stalls after `improve`):
-
-```json
-{ "role": "openclaw", "runtime": "openclaw", "agent": "vto-coder-<you>", "maxConcurrent": 1 }
-```
+*(The old "add an openclaw worker with agent vto-coder-<you>" instructions are retired by the above.)*
 
 Confirm `runtimes.openclaw` points at your `openclaw.ps1`, and `openclaw models status` shows the
 claude-cli/Anthropic provider authed (`--local` needs it). Rohit's agent = `vto-coder-rohit`; the shared
