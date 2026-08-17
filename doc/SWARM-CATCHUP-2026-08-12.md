@@ -43,10 +43,14 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 6. Start your gateway too (dual-peer): `npx tsx apps/bridge/src/gateway.ts` — it's now safe to run on
    both machines. (Ping Rohit to make sure exactly one gateway per machine, two total.)
 
-## OpenClaw implement/fix — workspace-SYNC design (re-enabled, safe)
+## OpenClaw — OPT-IN complex-coding path (workspace-synced)
 
-The loop's `implement` (OpenClaw between `improve`→`build`) and `fix-on-failure` stages run via OpenClaw
-(`openclaw agent --local --agent <id> --message-file <f>`). **Critical:** an OpenClaw agent treats its
+**The default loop no longer uses OpenClaw.** The `improve` step is a hermes agent in the repo cwd — it
+**edits the files directly** (proven on a live run 2026-08-17; hermes has write tools and, unlike
+OpenClaw, doesn't scaffold), and `fix-on-failure` routes to a hermes `coder` in-repo. OpenClaw is now
+**opt-in for genuinely complex changes** — seed an `implement` task (role=openclaw). When used it runs
+via `openclaw agent --local --agent <id> --message-file <f>` with the workspace-sync below. **Critical:**
+an OpenClaw agent treats its
 `--workspace` as its OWN home — on first run it **scaffolds `SOUL.md`/`IDENTITY.md`/`AGENTS.md`/… and
 `git init`s that directory**. Pointing it at the live repo destroys it (learned live 2026-08-17: it
 polluted `rkumar-vto` + nested-`.git`-shadowed the real repo — recovered because `rkumar-vto` is a subdir

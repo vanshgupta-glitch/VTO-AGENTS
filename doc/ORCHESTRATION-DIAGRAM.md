@@ -198,14 +198,14 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 | admin, researcher | LLM | hermes · `deepseek/deepseek-v4-flash` |
 | critic, coder | LLM | hermes · `qwen/qwen3-coder-flash` |
 | opencode | LLM | opencode · `big-pickle` (free; simple edits / scaffolds; falls back to openclaw/haiku when exhausted) |
-| **openclaw** (`implement`) | LLM | openclaw · `claude-haiku-4-5` — **agentic coder that edits repo files** (runs with `cwd=repoPath`); the loop's implement step for complex coding |
+| **openclaw** (`implement`) | LLM | openclaw · `claude-haiku-4-5` — **OPT-IN complex coder** (workspace-synced, mirrored to/from the repo). NOT the default loop — `improve`/hermes edits in-repo directly. |
 | claude | LLM | claude · `opus-4-8` (judgment/review; installed, not yet worker-bound) |
 | build, lint, deploy, video, accuracy | operation | `packages/operations` (shell, no LLM) |
 
 ## Autonomy & gates
 
 - **Auto:** code → build → test → accuracy → **deploy to the DEV store** (D-033).
-- **Auto-fix (OpenClaw):** a `build`/`test`/`video` failure is routed to OpenClaw (`claude-haiku`) to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
+- **Auto-fix:** a `build`/`test`/`video` failure is routed to a hermes `coder` (edits in-repo) to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
 - **Human-gated:** git commit/push — halts at a `human_gates` row; **either** operator approves (D-034); the system records the approval, never performs the commit (D-008).
 - **Pre-code critique gate (D-005):** a code task can't be claimed until a passing critique row exists.
 - **Overflow (D-032):** one pool per role; a worker claims only with a free slot; first free worker on either machine wins — implicit, no hand-off messages.
