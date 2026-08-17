@@ -135,7 +135,13 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
     return;
   }
   // Health check: "@VTO-Admin health" → every alive worker replies "OK WORKING from <role>".
-  const healthMatch = event.text.match(/^\s*(?:@?[\w-]+\s+)?(?:health|status)\b/i) ?? event.text.match(/check\s+all\s+agents?/i);
+  // Slack's @-autocomplete sends `<@U0BP6MRHJ2W> health`, NOT `@VTO-Admin health`. The old anchored
+  // pattern could not match a leading `<@…>` token (`<` is neither `@` nor `[\w-]`), so a real
+  // mention silently fell through to a plain admin task and the agent answered the word "health"
+  // as if it were a feature request. Strip mention tokens first, then match on what's left.
+  const spoken = event.text.replace(/<@[UW][A-Z0-9]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const healthMatch =
+    spoken.match(/^\s*(?:@?[\w-]+\s+)?(?:health|status)\b/i) ?? spoken.match(/check\s+all\s+agents?/i);
   if (target === 'admin' && healthMatch) {
     await enqueueTask({
       role: 'admin',

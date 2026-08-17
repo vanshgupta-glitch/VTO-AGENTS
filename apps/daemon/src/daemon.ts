@@ -21,7 +21,7 @@ import {
   type Task,
 } from '@vto-swarm/db';
 import { execute, type Operation, type OpConfig } from '@vto-swarm/operations';
-import { loadSecrets, loadMachine } from './config.js';
+import { loadSecrets, loadMachine, loadChannelIds, HOME_CHANNEL } from './config.js';
 import { runRuntime, type WorkerDef } from './runtimes.js';
 
 loadSecrets();
@@ -71,6 +71,23 @@ const OP_POST_BOT: Record<string, string> = {
 const LLM_POST_BOT: Record<string, string> = { openclaw: 'coder' };
 const postAgentFor = (w: WorkerDef): string =>
   w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : (LLM_POST_BOT[w.role] ?? w.role);
+
+/** channels.yaml is read once at boot — the ids do not change while the daemon runs. */
+const CHANNEL_IDS = loadChannelIds();
+
+/**
+ * Post the answer into the role's own channel as well, unthreaded.
+ * Skipped when the command already came from that channel (no point posting it twice), and when the
+ * role has no home channel. A bot can only post where it has been invited, so a miss surfaces as
+ * `not_in_channel` on that single post_queue row and never blocks the threaded reply.
+ */
+async function mirrorToHomeChannel(w: WorkerDef, fromChannel: string, body: string): Promise<void> {
+  const home = HOME_CHANNEL[w.role];
+  if (!home) return;
+  const id = CHANNEL_IDS[home];
+  if (!id || id === fromChannel) return;
+  await enqueuePost({ channel: id, agent: postAgentFor(w), text: body, threadTs: null });
+}
 
 function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   switch (w.op) {
@@ -212,12 +229,13 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
     }
     await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });
     if (task.channel) {
-      await enqueuePost({
-        channel: task.channel,
-        agent: postAgentFor(w),
-        text: (text || '(empty)').slice(0, 2800),
-        threadTs,
-      });
+      const body = (text || '(empty)').slice(0, 2800);
+      await enqueuePost({ channel: task.channel, agent: postAgentFor(w), text: body, threadTs });
+      // Mirror the ANSWER into the role's own channel too, so each channel stays a readable log of
+      // just its own concern while the human still sees everything threaded under their command.
+      // Only the answer is mirrored — not the running…/done markers — because the poster drains
+      // ~1 message/sec globally and tripling every reply would starve it.
+      await mirrorToHomeChannel(w, task.channel, body);
       await enqueuePost({
         channel: task.channel,
         agent: postAgentFor(w),
