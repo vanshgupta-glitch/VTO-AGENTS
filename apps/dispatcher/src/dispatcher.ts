@@ -22,6 +22,8 @@ import {
   updateWorkflowRun,
   createStageTask,
   getStageTask,
+  listStageTasks,
+  listAliveWorkers,
   getRunOutputText,
   recordCritique,
   setCritiquePassed,
@@ -44,16 +46,21 @@ const LOG_TO_SLACK = false; // avoid noise during bring-up; set true once stable
 
 const PASS_RE = /\bPASS(ED)?\b/i;
 
+/** Health-loop fans out to exactly the chat-capable agent roles (has a Slack bot; not an operation). */
+const FANOUT_ROLES = ['admin', 'claude', 'critic', 'researcher', 'coder', 'opencode', 'testrunner', 'scout'];
+
 function isPass(text: string): boolean {
   return PASS_RE.test(text);
 }
 
-function stageText(def: WorkflowDef, stage: Stage, run: WorkflowRun, extra?: string): string {
+function stageText(def: WorkflowDef, stage: Stage, run: WorkflowRun, extra?: string, role?: string): string {
   const carry = Object.keys(run.carry).length > 0 ? `\n\nEvidence so far:\n${JSON.stringify(run.carry)}` : '';
   const goal = run.goal ? `\n\nGoal: ${run.goal}` : '';
-  const prompt = stage.produces
-    ? `Produce the ${stage.produces} for the ${def.name}. Be concise and concrete.`
-    : 'Complete this stage. Be concise and concrete.';
+  const prompt = stage.prompt
+    ? stage.prompt.replaceAll('{role}', role ?? 'agent')
+    : stage.produces
+      ? `Produce the ${stage.produces} for the ${def.name}. Be concise and concrete.`
+      : 'Complete this stage. Be concise and concrete.';
   return `(${def.name} / ${stage.id}) ${prompt}${goal}${carry}${extra ? `\n\n${extra}` : ''}`;
 }
 
@@ -66,13 +73,33 @@ async function post(kind: string, text: string, run?: WorkflowRun): Promise<void
 // ── Stage task creation ───────────────────────────────────────────────────────
 async function createStageWork(run: WorkflowRun, stage: Stage): Promise<number> {
   const extra = `Workflow ${run.workflow} stage ${stage.id}${run.channel ? ` (channel ${run.channel})` : ''}`;
+  if (stage.executor.kind === 'fanout') {
+    // Fan out to alive chat-capable workers: every healthy agent replies "OK WORKING".
+    const alive = await listAliveWorkers(90);
+    const roles = (stage.executor.roles?.length ? stage.executor.roles : FANOUT_ROLES).filter((r) => alive.includes(r));
+    for (const role of roles) {
+      await createStageTask({
+        runId: run.id,
+        stage: stage.id,
+        role,
+        kind: 'health',
+        // `ts` = the originating Slack command's ts — the daemon posts every reply into that thread,
+        // so the whole run reads as one conversation (0004_workflow_threads.sql).
+        payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra, role), goal: run.goal, channel: run.channel, ts: run.thread_ts ?? null },
+        channel: run.channel,
+      });
+    }
+    return roles.length;
+  }
   if (stage.executor.kind !== 'agent' && stage.executor.kind !== 'operation') return 0;
   return createStageTask({
     runId: run.id,
     stage: stage.id,
     role: stage.executor.kind === 'agent' ? stage.executor.role : stage.executor.op,
     kind: stage.executor.kind === 'operation' ? stage.executor.op : stage.id.toLowerCase(),
-    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel },
+    // `ts` = the originating Slack command's ts — the daemon posts every reply into that thread,
+    // so the whole run reads as one conversation (0004_workflow_threads.sql).
+    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel, ts: run.thread_ts ?? null },
     needsCritique: stage.gate === 'critique',
     channel: run.channel,
   });
@@ -109,6 +136,7 @@ async function routeTo(run: WorkflowRun, def: WorkflowDef, stage: Stage, role: s
     payload: {
       text: `(rework ${def.name}/${stage.id}) ${reason}\n\n${stageText(def, stage, run)}`,
       channel: run.channel,
+      ts: run.thread_ts ?? null,
     },
     channel: run.channel,
   });
@@ -131,6 +159,22 @@ async function applyResult(run: WorkflowRun, def: WorkflowDef, stage: Stage, tas
     return advanceTo(run, def, stage.transitions.on_success, `${stage.id} ok`);
   }
   const reason = `stage ${stage.id} failed: ${output.slice(0, 400) || (task.last_error ?? 'no output')}`;
+  // Stuck → top-tier review: a failed stage routes to Claude, whose analysis becomes the Admin
+  // rework directive (see advanceRun's CLAUDE_REVIEW handling). Cap the loop: after 2 reviews the
+  // run escalates instead of cycling between executor and reviewer.
+  const stuckTarget = stage.transitions.on_stuck;
+  if (stuckTarget) {
+    const count = (run.carry.stuck_count as number | undefined) ?? 0;
+    if (count >= 2) {
+      await createEscalation({ taskId: task.id, reason: `stuck cap reached on ${stage.id}: ${reason}`, toAgent: 'admin' });
+      await updateWorkflowRun(run.id, { status: 'halted', currentStage: null, error: `stuck cap reached: ${reason}` });
+      return post('ESCALATE', `stuck cap (${count}) on ${stage.id} — escalated: ${reason}`, run);
+    }
+    await updateWorkflowRun(run.id, {
+      carry: { ...run.carry, stuck_count: count + 1, stuck_stage: stage.id, stuck_reason: reason },
+    });
+    return advanceTo(run, def, stuckTarget, `stage ${stage.id} stuck → ${stuckTarget}`);
+  }
   if (failTarget.startsWith('route:')) {
     return routeTo(run, def, stage, failTarget.split(':')[1]!, reason);
   }
@@ -163,6 +207,7 @@ async function handleCritiqueGate(run: WorkflowRun, def: WorkflowDef, stage: Sta
       payload: {
         text: `(critique gate ${def.name}/${stage.id}) Review the work order/plan for correctness and risk before it ships. Reply with exactly "PASS" or "BLOCK" plus a one-line reason.\n\nTarget task #${gated.id}\n${stageText(def, stage, run)}`,
         channel: run.channel,
+        ts: run.thread_ts ?? null,
       },
       channel: run.channel,
     });
@@ -196,6 +241,7 @@ async function handleHumanGate(run: WorkflowRun, def: WorkflowDef, stage: Stage)
       channel: HUMAN_GATE_CHANNEL || run.channel || 'swarm-command',
       agent: 'admin',
       text: `:stop_sign: *HUMAN GATE* — ${def.name} reached ${stage.id}.\nGoal: ${run.goal ?? '(no goal)'}\n\nApprove with :white_check_mark: (commit authority, D-034) or reject with :x:.`,
+      threadTs: run.thread_ts ?? null,
       linkGateId: gateId,
     });
     return;
@@ -228,6 +274,64 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
   // Human gate stage — no task, just a gate row + post.
   if (stage.executor.kind === 'human') {
     return handleHumanGate(run, def, stage);
+  }
+
+  // Fan-out stage (health-loop): one task per alive chat-capable worker, all under this stage id.
+  if (stage.executor.kind === 'fanout') {
+    const tasks = await listStageTasks(run.id, stageId);
+    if (tasks.length === 0) {
+      await createStageWork(run, stage);
+      return;
+    }
+    const done = tasks.filter((t) => t.status === 'done').length;
+    const failed = tasks.filter((t) => t.status === 'failed' || t.status === 'blocked').length;
+    if (done === tasks.length) {
+      return advanceTo(run, def, stage.transitions.on_success, `all ${done} agents replied OK`);
+    }
+    if (failed > 0) {
+      return advanceTo(run, def, stage.transitions.on_fail ?? 'end', `${failed} agent(s) failed health check`);
+    }
+    return; // still running — daemons are on the remaining tasks
+  }
+
+  // Claude stuck review (CLAUDE_REVIEW): a failed stage routed here with stuck_stage in the carry.
+  // Claude analyses the failure; its verdict becomes the Admin rework directive on the stuck stage
+  // — Claude decides, Admin schedules. If Claude's own review fails, the run halts.
+  if (stage.executor.kind === 'agent' && stage.executor.role === 'claude' && run.carry.stuck_stage) {
+    const task = await getStageTask(run.id, stageId);
+    if (!task) {
+      await createStageWork(run, stage);
+      return;
+    }
+    if (task.status === 'done') {
+      const analysis = await getRunOutputText(task.id);
+      const stuckId = String(run.carry.stuck_stage);
+      const stuckReason = String(run.carry.stuck_reason ?? '');
+      const stuck = def.stages[stuckId];
+      await markTaskBlocked(task.id); // consume the review marker so it never re-fires
+      await updateWorkflowRun(run.id, {
+        carry: { ...run.carry, stuck_stage: undefined, stuck_reason: undefined },
+        error: null,
+      });
+      if (!stuck) {
+        await updateWorkflowRun(run.id, { status: 'halted', currentStage: null, error: `claude review of unknown stage ${stuckId}` });
+        return;
+      }
+      const reason = `[claude stuck review]\n${(analysis || '(no analysis)').slice(0, 2500)}\n\n[original failure]\n${stuckReason}`;
+      await routeTo(run, def, stuck, 'admin', reason);
+      return advanceTo(run, def, stuckId, 'claude review done → admin rework');
+    }
+    if (task.status === 'failed' || task.status === 'blocked') {
+      const output = await getRunOutputText(task.id);
+      await updateWorkflowRun(run.id, {
+        status: 'halted',
+        currentStage: null,
+        error: `${stageId} review failed: ${output || (task.last_error ?? 'no output')}`,
+      });
+      await post('ESCALATE', `${stageId} review failed for run #${run.id}`, run);
+      return;
+    }
+    return; // queued / claimed / running — the daemon is on it.
   }
 
   // Handle a pending rework first: a `route:` failure spawned a rework task for this stage.
@@ -275,12 +379,13 @@ async function intake(): Promise<void> {
   for (let i = 0; i < 5; i++) {
     const trig = await claimWorkflowTrigger();
     if (!trig) break;
-    const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string };
+    const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string; ts?: string };
     const wf = typeof p.workflow === 'string' && p.workflow in WORKFLOWS ? p.workflow : 'improvement-loop';
     const run = await createWorkflowRun({
       workflow: wf,
       goal: p.goal ?? (trig.requested_by ? `triggered by ${trig.requested_by}` : 'no goal'),
       channel: trig.channel ?? p.channel ?? null,
+      threadTs: p.ts ?? null,
     });
     await finishTrigger(trig.id, run.id);
     await post('START', `${wf} started — run #${run.id}`, run);

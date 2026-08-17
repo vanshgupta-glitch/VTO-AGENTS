@@ -267,14 +267,20 @@ export async function enqueuePost(p: {
  *   1. skip a channel that already has a post 'sending' (never two concurrent posts to one channel);
  *   2. skip a channel posted to within the last ~1.1s ('sent'), enforcing Slack's ~1/sec/channel.
  * FOR UPDATE SKIP LOCKED stops the two posters grabbing the same row; different channels still post
- * in parallel across machines. (A crashed poster's stuck 'sending' row is freed by recoverStale.)
+ * in parallel across machines. (A crashed poster's stuck 'sending' row is freed by recoverStale,
+ * which ages it out on `claimed_at` — stamped below — so a slow post is never reaped mid-flight.)
  */
 export async function claimNextPost(): Promise<QueuedPost | null> {
   const client = await getPool().connect();
   try {
     await client.query('begin');
     const r = await client.query<QueuedPost>(
-      `update post_queue set status = 'sending'
+      // `claimed_at` stamps WHEN a poster took the row, which is what the reaper in
+      // recoverStale must age out on. Reaping on `created_at` instead would return a row to
+      // 'pending' while this gateway is still inside chat.postMessage — a double post to
+      // Slack — because a post can legitimately sit 'pending' longer than the stale window
+      // (the per-channel guards serialize a channel to ~1/sec, and a busy channel queues).
+      `update post_queue set status = 'sending', claimed_at = now()
        where id = (
          select p.id from post_queue p
          where p.status = 'pending'
@@ -350,7 +356,8 @@ export interface RecoveryReport {
  *      (daemon died mid-run) OR because the run itself is simply too old (a daemon restarted,
  *      re-registered the worker fresh, and lost track of the run). Both are closed as `timeout`
  *      and their task requeued so another machine can claim it.
- *   4. `post_queue` rows left `sending` by a crashed poster → back to `pending`.
+ *   4. `post_queue` rows left `sending` by a crashed poster → back to `pending`, aged on
+ *      `claimed_at` (NOT `created_at`, which would double-post a slow but healthy send).
  */
 export async function recoverStale(opts: {
   staleSeconds?: number;
@@ -398,9 +405,15 @@ export async function recoverStale(opts: {
       runsClosed = closed.rowCount ?? 0;
     }
 
+    // Age out on when the row was CLAIMED, not created — see the note in claimNextPost.
+    // COALESCE covers the rolling-deploy window: a peer still running pre-fix code leaves
+    // `claimed_at` null, and those rows must stay reapable (a stuck 'sending' row blocks its
+    // whole channel via claimNextPost's per-channel guard). They fall back to the old
+    // created_at behaviour — no worse than before — and self-correct once that peer updates.
     const posts = await client.query(
       `update post_queue set status = 'pending'
-       where status = 'sending' and created_at < now() - ($1 || ' seconds')::interval`,
+       where status = 'sending'
+         and coalesce(claimed_at, created_at) < now() - ($1 || ' seconds')::interval`,
       [stale],
     );
 
@@ -426,6 +439,7 @@ export interface WorkflowRun {
   workflow: string;
   goal: string | null;
   channel: string | null;
+  thread_ts: string | null;
   status: string;
   current_stage: string | null;
   carry: Record<string, unknown>;
@@ -438,10 +452,11 @@ export async function createWorkflowRun(w: {
   workflow: string;
   goal?: string | null;
   channel?: string | null;
+  threadTs?: string | null;
 }): Promise<WorkflowRun> {
   const r = await getPool().query<WorkflowRun>(
-    `insert into workflow_runs (workflow, goal, channel) values ($1, $2, $3) returning *`,
-    [w.workflow, w.goal ?? null, w.channel ?? null],
+    `insert into workflow_runs (workflow, goal, channel, thread_ts) values ($1, $2, $3, $4) returning *`,
+    [w.workflow, w.goal ?? null, w.channel ?? null, w.threadTs ?? null],
   );
   return r.rows[0]!;
 }
@@ -532,6 +547,24 @@ export async function getStageTask(runId: number, stage: string): Promise<Workfl
     [runId, stage],
   );
   return r.rows[0] ?? null;
+}
+
+/** All tasks for a (run, stage) — fan-out stages create one task per role under the same stage id. */
+export async function listStageTasks(runId: number, stage: string): Promise<WorkflowTask[]> {
+  const r = await getPool().query<WorkflowTask>(
+    `select * from tasks where workflow_run_id = $1 and stage = $2 order by id`,
+    [runId, stage],
+  );
+  return r.rows;
+}
+
+/** Distinct worker roles that have heartbeated recently — the health-loop fans out to exactly these. */
+export async function listAliveWorkers(withinSeconds = 90): Promise<string[]> {
+  const r = await getPool().query<{ role: string }>(
+    `select distinct role from workers where last_heartbeat > now() - make_interval(secs => $1)`,
+    [withinSeconds],
+  );
+  return r.rows.map((x) => x.role);
 }
 
 /** Claim the next queued workflow trigger (kind='workflow', SKIP LOCKED) — the dispatcher's intake. */

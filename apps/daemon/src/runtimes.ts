@@ -42,7 +42,12 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'claude') {
     const bin = paths.claude;
     if (!bin) throw new Error('claude path not configured');
-    const { stdout } = await execFileP(bin, ['-p', prompt, '--model', w.model ?? 'claude-opus-4-8'], opts);
+    // Authenticated Claude Code subscription (no OpenRouter): omit `--model` so the CLI uses the
+    // best model the subscription allows; pass it only when the worker explicitly pins one.
+    // The kit prompt can begin with `---` (soul frontmatter); a leading `-` is parsed as an option,
+    // so prepend a newline to force it to be treated as the positional prompt.
+    const args = w.model ? ['-p', `\n${prompt}`, '--model', w.model] : ['-p', `\n${prompt}`];
+    const { stdout } = await execFileP(bin, args, opts);
     return stripAnsi(stdout).trim();
   }
   if (w.runtime === 'opencode') {

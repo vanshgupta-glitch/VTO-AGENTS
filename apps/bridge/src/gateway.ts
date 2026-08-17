@@ -21,11 +21,12 @@ import {
   approveHumanGate,
   rejectHumanGate,
 } from '@vto-swarm/db';
-import { loadSecrets, AGENTS, type AgentKey } from './config.js';
+import { loadSecrets, loadChannelIds, AGENTS, type AgentKey } from './config.js';
 
 const secrets = loadSecrets();
 const MACHINE_ID = `gateway-${process.platform}-${hostname()}`;
 const AGENT_KEYS = Object.keys(AGENTS) as AgentKey[];
+const CHANNEL_IDS = loadChannelIds();
 const webClients = new Map<AgentKey, WebClient>();
 
 function clientFor(agent: AgentKey): WebClient {
@@ -83,7 +84,29 @@ interface SlackEvent {
   channel?: string;
   user?: string;
   ts?: string;
+  thread_ts?: string;
   client_msg_id?: string;
+}
+
+/**
+ * A bare message in #swarm-command (no @mention) is an ORCHESTRATION command: the gateway turns it
+ * into an improvement-loop run where Claude (tier-1 strategist) analyzes it and hands the work
+ * order to Admin, who decomposes into per-agent tasks. This is how "just type a command" works.
+ */
+async function maybeAutoTrigger(event: SlackEvent): Promise<void> {
+  const cmdChannel = CHANNEL_IDS['swarm-command'];
+  if (!cmdChannel || event.channel !== cmdChannel) return;
+  if (event.thread_ts) return; // thread replies don't re-trigger
+  const text = (event.text ?? '').trim();
+  if (text.length < 3) return;
+  await enqueueTask({
+    role: 'admin',
+    kind: 'workflow',
+    payload: { workflow: 'improvement-loop', goal: text, channel: event.channel, ts: event.ts },
+    channel: event.channel ?? null,
+    requestedBy: event.user ?? null,
+  });
+  console.log(`[gateway] auto-triggered improvement-loop from ${event.user ?? '?'}: ${text.slice(0, 80)}`);
 }
 
 async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }): Promise<void> {
@@ -94,18 +117,34 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
   const dedupId = event.client_msg_id ?? `${event.channel ?? '?'}:${event.ts ?? '?'}`;
   if (!(await dedupSlackEvent(dedupId, event.channel ?? null, event.ts ?? null))) return; // duplicate
   const target = parseTarget(event.text);
-  if (!target) return;
+  if (!target) {
+    await maybeAutoTrigger(event);
+    return;
+  }
   // Workflow triggers (D-034): "improve <goal>" or "workflow <name>: <goal>" → dispatcher intake.
   const wfMatch = event.text.match(/\b(?:improve|workflow)\s+(?:loop|improvement-loop)?\s*[:,-]?\s*(.+)/i);
   if (target === 'admin' && wfMatch && wfMatch[1]) {
     await enqueueTask({
       role: 'admin',
       kind: 'workflow',
-      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel },
+      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel, ts: event.ts },
       channel: event.channel ?? null,
       requestedBy: event.user ?? null,
     });
     console.log(`[gateway] queued workflow trigger from ${event.user ?? '?'}`);
+    return;
+  }
+  // Health check: "@VTO-Admin health" → every alive worker replies "OK WORKING from <role>".
+  const healthMatch = event.text.match(/^\s*(?:@?[\w-]+\s+)?(?:health|status)\b/i) ?? event.text.match(/check\s+all\s+agents?/i);
+  if (target === 'admin' && healthMatch) {
+    await enqueueTask({
+      role: 'admin',
+      kind: 'workflow',
+      payload: { workflow: 'health-loop', goal: 'swarm health check', channel: event.channel, ts: event.ts },
+      channel: event.channel ?? null,
+      requestedBy: event.user ?? null,
+    });
+    console.log(`[gateway] queued health-check from ${event.user ?? '?'}`);
     return;
   }
   await enqueueTask({
@@ -165,6 +204,12 @@ async function main(): Promise<void> {
   setInterval(() => void posterTick().catch((e) => console.warn('[gateway] poster', e)), 1100);
 
   const socket = new SocketModeClient({ appToken });
+  socket.on('connecting', () => console.log('[gateway] socket connecting…'));
+  socket.on('hello', () => console.log('[gateway] socket hello — connection established'));
+  socket.on('connected', () => console.log('[gateway] socket connected'));
+  socket.on('disconnected', (e: unknown) => console.warn('[gateway] socket DISCONNECTED', e));
+  socket.on('error', (e: unknown) => console.warn('[gateway] socket error', e));
+  socket.on('slack_socket_error', (e: unknown) => console.warn('[gateway] socket error:', e));
   socket.on('message', onEvent);
   socket.on('app_mention', onEvent);
   socket.on('reaction_added', onReaction);

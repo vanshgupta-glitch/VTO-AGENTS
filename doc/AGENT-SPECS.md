@@ -66,7 +66,7 @@ session: fresh                     # every invocation, no exception
 codebase: any                      # the only agent permitted to read across codebases
 capabilities: [analyse.codebase, plan.workorder, enrich.documents, interpret.verification]
 allowed_operations: [documents.read, documents.write, repo.diff, repo.issues, repo.prs, repo.changes_since]
-skills: [vto/visual-diff@^1, vto/accuracy-interpretation@^1, report-writing@^1]
+skills: [vto/claude-orchestration@^1, vto/visual-diff@^1, vto/accuracy-interpretation@^1, report-writing@^1]
 knowledge: [swarm-protocol@^1, vto-domain@^1, competitor-landscape@^1]
 recovery: { escalates_to: null }   # null valid only here
 reports: { on_success: human, on_escalation: human }

@@ -5,6 +5,9 @@
  * cross-machine overflow physically happens: whichever machine has a free worker claims next.
  */
 import { hostname } from 'node:os';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   registerMachine,
   registerWorker,
@@ -27,6 +30,20 @@ const MACHINE_ID = machine.machineId ?? `worker-${process.platform}-${hostname()
 const inFlight = new Map<string, number>();
 
 const workerId = (w: WorkerDef): string => `${MACHINE_ID}:${w.role}`;
+
+// Claude Code is the only runtime that gets its full identity injected: `claude -p` spawns a fresh
+// process with no memory, so the strategist soul + orchestration skill must travel with the prompt.
+const VAULT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+function claudeKit(): string {
+  try {
+    const soul = readFileSync(resolve(VAULT, 'soul/claude.md'), 'utf8');
+    const skill = readFileSync(resolve(VAULT, 'skills/vto/claude-orchestration/SKILL.md'), 'utf8');
+    return `${soul}\n\n--- CLAUDE ORCHESTRATION SKILL (follow it) ---\n${skill}`;
+  } catch (e) {
+    console.warn('[daemon] could not load claude kit:', (e as Error).message);
+    return '';
+  }
+}
 
 interface TaskPayload {
   text?: string;
@@ -90,6 +107,15 @@ async function chainNext(task: Task): Promise<void> {
 
 async function handleTask(w: WorkerDef, task: Task): Promise<void> {
   const payload = task.payload as TaskPayload;
+  const threadTs = payload.ts ?? null;
+  if (task.channel) {
+    await enqueuePost({
+      channel: task.channel,
+      agent: postAgentFor(w),
+      text: `:arrows_counterclockwise: ${w.role} running…`,
+      threadTs,
+    });
+  }
   try {
     let ok = true;
     let text: string;
@@ -105,9 +131,10 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       text = `*[${res.op}]* ${res.summary}  _(${secs}s)_${ok ? '' : `\n\`\`\`${res.tail.slice(-900)}\`\`\``}`;
     } else {
       const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
+      const kit = w.role === 'claude' ? `${claudeKit()}\n\n` : '';
       text = await runRuntime(
         w,
-        `${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
+        `${kit}${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
         machine.runtimes,
       );
     }
@@ -117,7 +144,13 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         channel: task.channel,
         agent: postAgentFor(w),
         text: (text || '(empty)').slice(0, 2800),
-        threadTs: payload.ts ?? null,
+        threadTs,
+      });
+      await enqueuePost({
+        channel: task.channel,
+        agent: postAgentFor(w),
+        text: ok ? `:white_check_mark: ${w.role} done` : `:x: ${w.role} failed`,
+        threadTs,
       });
     }
     console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
@@ -129,8 +162,8 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       await enqueuePost({
         channel: task.channel,
         agent: postAgentFor(w),
-        text: `:warning: ${w.role} failed: ${msg.slice(0, 300)}`,
-        threadTs: payload.ts ?? null,
+        text: `:x: ${w.role} failed: ${msg.slice(0, 300)}`,
+        threadTs,
       });
     }
     console.warn(`[daemon] ${w.role} ERROR task ${task.id}: ${msg.slice(0, 200)}`);

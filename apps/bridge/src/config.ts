@@ -52,3 +52,23 @@ export const AGENTS: Record<AgentKey, { tokenEnv: string }> = {
   accuracy: { tokenEnv: 'SLACK_BOT_ACCURACY' },
   scout: { tokenEnv: 'SLACK_BOT_SCOUT' },
 };
+
+/** Channel name → id, from config/channels.yaml (only the gateway auto-triggers in #swarm-command). */
+export function loadChannelIds(): Record<string, string> {
+  const path = resolve(VAULT, 'config/channels.yaml');
+  const ids: Record<string, string> = {};
+  let name: string | null = null;
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const n = line.match(/^\s*-\s*name:\s*(.+)$/);
+    if (n) {
+      name = n[1]!.trim();
+      continue;
+    }
+    const id = line.match(/^\s*id:\s*(.+)$/);
+    if (id && name) {
+      ids[name] = id[1]!.trim();
+      name = null;
+    }
+  }
+  return ids;
+}
