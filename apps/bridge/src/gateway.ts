@@ -113,7 +113,8 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
   await enqueueTask({
     role: target,
     kind: target,
-    payload: { text: event.text, slackUser: event.user, channel: event.channel, ts: event.ts },
+    // Slack work stays LOCAL — hard-pin to this gateway's machine (per the operator's directive).
+    payload: { text: event.text, slackUser: event.user, channel: event.channel, ts: event.ts, pinnedMachine: MACHINE_KEY },
     channel: event.channel ?? null,
     requestedBy: event.user ?? null,
   });

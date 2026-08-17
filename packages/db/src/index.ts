@@ -117,9 +117,34 @@ function queueRole(role: string, pinKey?: string | null): string {
   return pinKey ? `${role}__${pinKey.replace(/[^a-zA-Z0-9_]/g, '_')}` : role;
 }
 
-/** Put a task's id onto its (possibly machine-pinned) role queue for a worker to claim via pgmq. */
-async function sendToQueue(role: string, taskId: number, pinKey?: string | null): Promise<void> {
-  await getPool().query(`select vto_send($1, $2)`, [queueRole(role, pinKey), taskId]);
+/** Put a task's id onto a role queue (optionally machine-pinned, optionally delayed) for a worker. */
+async function sendToQueue(role: string, taskId: number, pinKey?: string | null, delaySecs = 0): Promise<void> {
+  await getPool().query(`select vto_send($1, $2, $3)`, [queueRole(role, pinKey), taskId, delaySecs]);
+}
+
+/** Seconds a soft-pinned task waits in its origin machine's queue before ALSO overflowing to shared. */
+const OVERFLOW_GRACE_SECS = Number(process.env.SWARM_OVERFLOW_GRACE) || 15;
+
+/**
+ * Route a claimable task to its queue(s) by the pin in its payload:
+ *  - `pinnedMachine` (HARD): only that machine's queue, no overflow — "stay local" (Slack work + loops).
+ *  - `preferMachine` (SOFT): that machine's queue immediately (its own agents get first dibs) AND the
+ *    shared queue after OVERFLOW_GRACE_SECS — a free agent elsewhere picks it up only if the local one
+ *    was still busy. "Own agents priority, not whoever polled first."
+ *  - neither: the shared queue immediately (pure cross-machine overflow — the old default).
+ * The soft duplicate is harmless: whoever claims first wins; the other copy is stale and claimTask
+ * acks-and-skips it on read.
+ */
+async function routeTask(role: string, taskId: number, payload?: Record<string, unknown>): Promise<void> {
+  const hard = typeof payload?.['pinnedMachine'] === 'string' ? (payload['pinnedMachine'] as string) : null;
+  const soft = typeof payload?.['preferMachine'] === 'string' ? (payload['preferMachine'] as string) : null;
+  if (hard) return void (await sendToQueue(role, taskId, hard));
+  if (soft) {
+    await sendToQueue(role, taskId, soft); // origin machine's queue, immediate — priority
+    await sendToQueue(role, taskId, null, OVERFLOW_GRACE_SECS); // shared queue, delayed — overflow
+    return;
+  }
+  await sendToQueue(role, taskId);
 }
 
 export async function enqueueTask(t: {
@@ -148,10 +173,9 @@ export async function enqueueTask(t: {
     ],
   );
   const id = r.rows[0]!.id;
-  const pin = typeof t.payload?.['pinnedMachine'] === 'string' ? (t.payload['pinnedMachine'] as string) : null;
   // Only claimable tasks go on the queue: workflow triggers are the dispatcher's own intake
   // (claimWorkflowTrigger), and a critique-gated task waits until setCritiquePassed() opens it.
-  if (t.kind !== 'workflow' && !(t.needsCritique ?? false)) await sendToQueue(t.role, id, pin);
+  if (t.kind !== 'workflow' && !(t.needsCritique ?? false)) await routeTask(t.role, id, t.payload);
   return id;
 }
 
@@ -191,8 +215,8 @@ export async function claimTask(role: string, workerId: string, machineId: strin
     // IS the crash recovery. Record the msg_id on the run so finishTask can ack this exact message.
     await client.query(`update tasks set status = 'claimed', updated_at = now() where id = $1`, [taskId]);
     await client.query(
-      `insert into runs (task_id, machine_id, worker_id, status, msg_id) values ($1, $2, $3, 'running', $4)`,
-      [taskId, machineId, workerId, msgId],
+      `insert into runs (task_id, machine_id, worker_id, status, msg_id, queue) values ($1, $2, $3, 'running', $4, $5)`,
+      [taskId, machineId, workerId, msgId, qRole],
     );
     await client.query(`update workers set active = active + 1, status = 'busy' where id = $1`, [workerId]);
     await client.query('commit');
@@ -218,8 +242,8 @@ export async function finishTask(
     await client.query('begin');
     // Grab the pgmq msg_id + role for this claim BEFORE closing the run, so we can ack the exact
     // message after committing (a crash before this point leaves the message for pgmq to redeliver).
-    const info = await client.query<{ msg_id: string | null; role: string; pin: string | null }>(
-      `select r.msg_id, t.role, (t.payload->>'pinnedMachine') as pin
+    const info = await client.query<{ msg_id: string | null; queue: string; role: string }>(
+      `select r.msg_id, coalesce(r.queue, t.role) as queue, t.role
        from runs r join tasks t on t.id = r.task_id
        where r.task_id = $1 and r.status = 'running' order by r.id desc limit 1`,
       [taskId],
@@ -243,7 +267,7 @@ export async function finishTask(
     // Terminal outcome → remove the message from the queue. A crash never reaches here, so the message
     // stays invisible only until CLAIM_VT elapses, then pgmq redelivers it (the automatic recovery).
     const done = info.rows[0];
-    if (done?.msg_id) await getPool().query(`select vto_ack($1, $2)`, [queueRole(done.role, done.pin), done.msg_id]);
+    if (done?.msg_id) await getPool().query(`select vto_ack($1, $2)`, [done.queue ?? done.role, done.msg_id]);
   } catch (e) {
     await client.query('rollback');
     throw e;
@@ -535,9 +559,8 @@ export async function createStageTask(t: {
     ],
   );
   const id = r.rows[0]!.id;
-  const pin = typeof t.payload?.['pinnedMachine'] === 'string' ? (t.payload['pinnedMachine'] as string) : null;
   // Stage tasks are claimable immediately unless critique-gated (then setCritiquePassed opens them).
-  if (!(t.needsCritique ?? false)) await sendToQueue(t.role, id, pin);
+  if (!(t.needsCritique ?? false)) await routeTask(t.role, id, t.payload);
   return id;
 }
 
@@ -609,14 +632,13 @@ export async function recordCritique(c: {
 }
 
 export async function setCritiquePassed(taskId: number): Promise<void> {
-  const r = await getPool().query<{ role: string; kind: string; pin: string | null }>(
-    `update tasks set critique_passed = true, updated_at = now() where id = $1
-     returning role, kind, (payload->>'pinnedMachine') as pin`,
+  const r = await getPool().query<{ role: string; kind: string; payload: Record<string, unknown> }>(
+    `update tasks set critique_passed = true, updated_at = now() where id = $1 returning role, kind, payload`,
     [taskId],
   );
-  // Gate is now open → make the task claimable by putting it on its (possibly pinned) role queue.
+  // Gate is now open → route the task to its queue(s), honoring hard/soft machine pins.
   const row = r.rows[0];
-  if (row && row.kind !== 'workflow') await sendToQueue(row.role, taskId, row.pin);
+  if (row && row.kind !== 'workflow') await routeTask(row.role, taskId, row.payload);
 }
 
 /** Tombstone a task (e.g. a consumed rework marker) so it never re-fires. */
