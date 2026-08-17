@@ -229,8 +229,9 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
   Per-process pool `max` also lowered (10→4, `SWARM_DB_POOL_MAX` override). *Vansh should switch his own
   `config/.secrets.env` to `:6543` too* — until then his daemon is the only user of the session pool.
 - ⚠️ Known defects from the shakedown: (1) daemon **version skew** across machines breaks chaining until
-  both re-pull; (2) op-persona bots (testrunner/videotester/accuracy) aren't in the channels yet — op
-  results currently post as `admin`; (3) `deploy→video+accuracy` fan-out is parallel, so accuracy can
+  both re-pull; (2) ~~op bots not in channels~~ **FIXED 2026-08-16** — all 10 bots invited to
+  #swarm-command; op results now post under their own identities (build/lint/test→testrunner,
+  video→videotester, accuracy→accuracy, deploy→admin); (3) `deploy→video+accuracy` fan-out is parallel, so accuracy can
   score stale logs (should chain accuracy **after** video); (4) a **stale `opencode` worker** on Vansh's
   box (busy, heartbeat ~75 min old) — reclaimed by the staleness monitor or a daemon restart.
 - 🔜 Next: commit/push the operations + chaining code (closes the version-skew gap), invite op bots,

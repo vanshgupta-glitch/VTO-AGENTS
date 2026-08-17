@@ -38,16 +38,16 @@ interface TaskPayload {
 
 /**
  * Which bot identity an operation worker posts under (LLM workers post under their own role).
- * NOTE: routed through 'admin' for now — the testrunner/videotester/accuracy bots are not members
- * of #swarm-command yet, so their posts fail (not_in_channel). Restore per-persona once invited.
+ * The op-persona bots (testrunner/videotester/accuracy) are now members of #swarm-command, so ops
+ * post under their own identities. `deploy` has no dedicated bot → admin (the orchestrator).
  */
 const OP_POST_BOT: Record<string, string> = {
-  build: 'admin',
-  lint: 'admin',
-  test: 'admin',
-  deploy: 'admin',
-  video: 'admin',
-  accuracy: 'admin',
+  build: 'testrunner',
+  lint: 'testrunner',
+  test: 'testrunner',
+  deploy: 'admin', // no dedicated deploy bot
+  video: 'videotester',
+  accuracy: 'accuracy',
 };
 const postAgentFor = (w: WorkerDef): string =>
   w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : w.role;
