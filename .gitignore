@@ -10,3 +10,5 @@ data/
 node_modules/
 config/machine.local.json
 dist/
+# daemon/gateway/dispatcher stdout+stderr, written per-machine when started detached
+.swarm-logs/
