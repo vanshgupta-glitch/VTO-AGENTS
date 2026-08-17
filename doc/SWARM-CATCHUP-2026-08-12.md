@@ -48,6 +48,8 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 The loop now inserts an `implement` stage run by **OpenClaw** (Claude haiku, agentic) between `improve`
 and `build` — OpenClaw edits the repo files directly, so the loop actually produces code, not just text
 suggestions. The cheap `improve` step (hermes) plans; OpenClaw implements. It runs with `cwd = repoPath`.
+OpenClaw also handles **fix-on-failure**: if `build`/`test`/`video` fails, the error is routed to OpenClaw
+to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
 
 Because `config/machine.local.json` is git-ignored (per-machine), **you must add the worker on your
 machine** or `implement` tasks are never claimed and the loop stalls after `improve`:

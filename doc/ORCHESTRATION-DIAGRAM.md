@@ -205,6 +205,7 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 ## Autonomy & gates
 
 - **Auto:** code → build → test → accuracy → **deploy to the DEV store** (D-033).
+- **Auto-fix (OpenClaw):** a `build`/`test`/`video` failure is routed to OpenClaw (`claude-haiku`) to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
 - **Human-gated:** git commit/push — halts at a `human_gates` row; **either** operator approves (D-034); the system records the approval, never performs the commit (D-008).
 - **Pre-code critique gate (D-005):** a code task can't be claimed until a passing critique row exists.
 - **Overflow (D-032):** one pool per role; a worker claims only with a free slot; first free worker on either machine wins — implicit, no hand-off messages.

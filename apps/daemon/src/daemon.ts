@@ -34,6 +34,7 @@ interface TaskPayload {
   channel?: string;
   file?: string;
   loop?: boolean;
+  fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
 }
 
 /**
@@ -86,7 +87,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
   const carry = {
     channel: task.channel,
     requestedBy: 'loop',
-    payload: { loop: true, text: p.text, ts: p.ts, file: p.file },
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount },
   };
   switch (task.kind) {
     case 'improve': {
@@ -101,6 +102,7 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
       break;
     }
     case 'implement': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
+    case 'fix': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break; // OpenClaw patched → re-verify from build
     case 'build': await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' }); break;
     case 'deploy': await enqueueTask({ ...carry, role: 'video', kind: 'video' }); break;
     case 'video': await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' }); break;
@@ -120,6 +122,41 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
       break;
     }
   }
+}
+
+/** Max OpenClaw auto-fix attempts per loop run before it halts for a human. */
+const MAX_FIX_ATTEMPTS = 2;
+
+/**
+ * On a loop step failing, route the error to OpenClaw to diagnose + patch the repo, then re-enter the
+ * loop at build. Only for steps a code patch can fix (build/test/video), and capped so it can't spin.
+ */
+async function chainOnFailure(task: Task, failureText: string): Promise<void> {
+  const p = task.payload as TaskPayload;
+  if (!p.loop) return;
+  if (!['build', 'test', 'video'].includes(task.kind)) return;
+  const fixCount = p.fixCount ?? 0;
+  if (fixCount >= MAX_FIX_ATTEMPTS) {
+    if (task.channel) {
+      await enqueuePost({
+        channel: task.channel,
+        agent: 'admin',
+        text: `:octagonal_sign: loop halted at *${task.kind}* after ${fixCount} OpenClaw fix attempts — needs a human.`,
+        threadTs: p.ts ?? null,
+      });
+    }
+    return;
+  }
+  const fixPrompt =
+    `The VTO engineering loop FAILED at the "${task.kind}" step. Diagnose the root cause and FIX it ` +
+    `directly in the repo (edit files, keep the change minimal), then say what you changed:\n\n${failureText}`;
+  await enqueueTask({
+    channel: task.channel,
+    requestedBy: 'loop',
+    role: 'openclaw',
+    kind: 'fix',
+    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1 },
+  });
 }
 
 async function handleTask(w: WorkerDef, task: Task): Promise<void> {
@@ -157,6 +194,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
     }
     console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
     if (ok) await chainNext(task, text);
+    else await chainOnFailure(task, text);
   } catch (e) {
     const msg = (e as Error).message;
     await finishTask(task.id, workerId(w), 'failed', null, msg);
@@ -169,6 +207,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       });
     }
     console.warn(`[daemon] ${w.role} ERROR task ${task.id}: ${msg.slice(0, 200)}`);
+    await chainOnFailure(task, msg);
   }
 }
 
