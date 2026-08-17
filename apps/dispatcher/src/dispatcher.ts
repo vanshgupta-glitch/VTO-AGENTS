@@ -40,7 +40,7 @@ loadSecrets();
 const CHANNELS = loadChannelIds();
 const HUMAN_GATE_CHANNEL = CHANNELS['swarm-human-gate'] ?? '';
 const INCIDENTS_CHANNEL = CHANNELS['swarm-incidents'] ?? '';
-const LOG_TO_SLACK = false; // avoid noise during bring-up; set true once stable
+const LOG_TO_SLACK = true; // agents + workflow progress post to Slack — the user watches there, not a terminal
 
 const PASS_RE = /\bPASS(ED)?\b/i;
 
@@ -262,10 +262,20 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
   if (task.status === 'done') {
     const output = await getRunOutputText(task.id);
     if (!output.trim()) {
-      const emptyTarget = stage.transitions.on_empty ?? stage.transitions.on_fail ?? 'halt';
+      // RETRY an empty stage a few times before giving up — a single transient empty output (a runtime
+      // hiccup) must NOT halt the whole loop (that was the "halt bug"). Only after N empties do we take
+      // the stage's on_empty/on_fail transition.
       await markTaskBlocked(task.id); // consume so re-entry spawns a fresh attempt
-      await post('EMPTY', `${stage.id} produced no output → ${emptyTarget}`, run);
-      return advanceTo(run, def, emptyTarget, `${stage.id} empty`);
+      const key = `empty_${stage.id}`;
+      const tries = ((run.carry[key] as number | undefined) ?? 0) + 1;
+      if (tries < 3) {
+        await updateWorkflowRun(run.id, { carry: { ...run.carry, [key]: tries } });
+        await post('RETRY', `${stage.id} produced no output → retry ${tries}/3`, run);
+        return; // stay on this stage; next tick spawns a fresh stage task
+      }
+      const emptyTarget = stage.transitions.on_empty ?? stage.transitions.on_fail ?? 'halt';
+      await post('EMPTY', `${stage.id} still empty after ${tries} tries → ${emptyTarget}`, run);
+      return advanceTo(run, def, emptyTarget, `${stage.id} empty x${tries}`);
     }
     await markTaskBlocked(task.id); // consume before advancing
     return applyResult(run, def, stage, task, true, output);
