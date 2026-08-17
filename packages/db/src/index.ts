@@ -563,7 +563,7 @@ export async function claimWorkflowTrigger(): Promise<Task | null> {
 export async function finishTrigger(taskId: number, runId: number): Promise<void> {
   await getPool().query(
     `update tasks set status = 'done', updated_at = now(),
-       payload = payload || jsonb_build_object('workflow_run_id', $2)
+       payload = payload || jsonb_build_object('workflow_run_id', $2::bigint)
      where id = $1`,
     [taskId, runId],
   );

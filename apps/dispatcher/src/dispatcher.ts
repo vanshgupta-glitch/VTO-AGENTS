@@ -150,11 +150,12 @@ async function handleCritiqueGate(run: WorkflowRun, def: WorkflowDef, stage: Sta
   // Gated task finished (it ran once passed) — apply normal result.
   if (gated.status === 'done' || gated.status === 'failed') {
     const output = await getRunOutputText(gated.id);
+    await markTaskBlocked(gated.id); // consume before applying the result
     return applyResult(run, def, stage, gated, gated.status === 'done', output);
   }
   if (gated.critique_passed) return; // unlocked; daemon will claim it
   const crit = await getStageTask(run.id, `${stage.id}:critic`);
-  if (!crit) {
+  if (!crit || crit.status === 'blocked') {
     await createStageTask({
       runId: run.id,
       stage: `${stage.id}:critic`,
@@ -173,10 +174,12 @@ async function handleCritiqueGate(run: WorkflowRun, def: WorkflowDef, stage: Sta
     if (isPass(verdict)) {
       await recordCritique({ taskId: gated.id, verdict: 'pass', notes: verdict.slice(0, 500), critic: 'critic' });
       await setCritiquePassed(gated.id);
+      await markTaskBlocked(crit.id); // tombstone the verdict; a re-entered stage spawns a fresh critic
       await post('CRITIQUE-PASS', `gate passed for task #${gated.id}`, run);
     } else {
       await recordCritique({ taskId: gated.id, verdict: 'block', notes: verdict.slice(0, 500), critic: 'critic' });
-      await markTaskBlocked(gated.id); // tombstone this attempt; rework spawns a fresh one
+      await markTaskBlocked(crit.id); // tombstone the verdict first
+      await markTaskBlocked(gated.id); // tombstone this attempt; re-entry spawns a fresh one
       const failTarget = stage.transitions.on_fail ?? 'escalate';
       const reason = `critique blocked: ${verdict.slice(0, 300)}`;
       await post('CRITIQUE-BLOCK', `gate blocked task #${gated.id} — ${failTarget}`, run);
@@ -242,7 +245,9 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
   }
 
   const task = await getStageTask(run.id, stageId);
-  if (!task) {
+  // A `blocked` task is a tombstone (consumed attempt or blocked gate): no active work exists,
+  // so spawn a fresh attempt. This is what lets a critique BLOCK loop back (PLAN→ANALYSE→…→PLAN).
+  if (!task || task.status === 'blocked') {
     const id = await createStageWork(run, stage);
     if (stage.gate === 'critique') {
       const gated = await getStageTask(run.id, stageId);
@@ -258,13 +263,16 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
     const output = await getRunOutputText(task.id);
     if (!output.trim()) {
       const emptyTarget = stage.transitions.on_empty ?? stage.transitions.on_fail ?? 'halt';
+      await markTaskBlocked(task.id); // consume so re-entry spawns a fresh attempt
       await post('EMPTY', `${stage.id} produced no output → ${emptyTarget}`, run);
       return advanceTo(run, def, emptyTarget, `${stage.id} empty`);
     }
+    await markTaskBlocked(task.id); // consume before advancing
     return applyResult(run, def, stage, task, true, output);
   }
-  if (task.status === 'failed' || task.status === 'blocked') {
+  if (task.status === 'failed') {
     const output = await getRunOutputText(task.id);
+    await markTaskBlocked(task.id); // consume before advancing
     return applyResult(run, def, stage, task, false, output || (task.last_error ?? 'failed'));
   }
   // queued / claimed / running → daemons are on it.
