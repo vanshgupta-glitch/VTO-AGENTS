@@ -71,8 +71,14 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   }
 }
 
-/** Advance the engineering loop on success (only for loop-tagged tasks). improve→build→deploy→video+accuracy. */
-async function chainNext(task: Task): Promise<void> {
+/**
+ * Advance the engineering loop on success (only for loop-tagged tasks). STRICTLY SEQUENTIAL so each
+ * step sees the previous step's fresh output: improve→build→deploy→video→accuracy→report. Accuracy
+ * runs only after video, so it analyzes the video tester's just-written logs (not stale ones); it
+ * then reports the verdict forward to admin (terminal in this simple chain — the workflow dispatcher
+ * owns any below-target loop-back).
+ */
+async function chainNext(task: Task, resultText: string): Promise<void> {
   const p = task.payload as TaskPayload;
   if (!p.loop) return;
   const carry = {
@@ -80,11 +86,26 @@ async function chainNext(task: Task): Promise<void> {
     requestedBy: 'loop',
     payload: { loop: true, text: p.text, ts: p.ts, file: p.file },
   };
-  if (task.kind === 'improve') await enqueueTask({ ...carry, role: 'build', kind: 'build' });
-  else if (task.kind === 'build') await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' });
-  else if (task.kind === 'deploy') {
-    await enqueueTask({ ...carry, role: 'video', kind: 'video' });
-    await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' });
+  switch (task.kind) {
+    case 'improve': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
+    case 'build': await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' }); break;
+    case 'deploy': await enqueueTask({ ...carry, role: 'video', kind: 'video' }); break;
+    case 'video': await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' }); break;
+    case 'accuracy': {
+      // Accuracy just analyzed the fresh video-tester results — report the verdict forward to admin.
+      const reportPrompt =
+        `Report this VTO try-on run to the team. The video UI-test ran, then accuracy analyzed its ` +
+        `results:\n\n${resultText}\n\nState whether we hit the 0.98 target vs FittingBox, and if below, ` +
+        `name the single most useful next improvement.`;
+      await enqueueTask({
+        channel: task.channel,
+        requestedBy: 'loop',
+        role: 'admin',
+        kind: 'report',
+        payload: { loop: false, text: reportPrompt, ts: p.ts },
+      });
+      break;
+    }
   }
 }
 
@@ -121,7 +142,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       });
     }
     console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
-    if (ok) await chainNext(task);
+    if (ok) await chainNext(task, text);
   } catch (e) {
     const msg = (e as Error).message;
     await finishTask(task.id, workerId(w), 'failed', null, msg);

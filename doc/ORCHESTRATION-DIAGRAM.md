@@ -231,8 +231,9 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 - ⚠️ Known defects from the shakedown: (1) daemon **version skew** across machines breaks chaining until
   both re-pull; (2) ~~op bots not in channels~~ **FIXED 2026-08-16** — all 10 bots invited to
   #swarm-command; op results now post under their own identities (build/lint/test→testrunner,
-  video→videotester, accuracy→accuracy, deploy→admin); (3) `deploy→video+accuracy` fan-out is parallel, so accuracy can
-  score stale logs (should chain accuracy **after** video); (4) a **stale `opencode` worker** on Vansh's
+  video→videotester, accuracy→accuracy, deploy→admin); (3) ~~`deploy→video+accuracy` parallel~~ **FIXED 2026-08-17** — the chain is now strictly
+  sequential `deploy→video→accuracy→report`; accuracy analyzes the fresh video-tester logs, then
+  reports the verdict forward to admin; (4) a **stale `opencode` worker** on Vansh's
   box (busy, heartbeat ~75 min old) — reclaimed by the staleness monitor or a daemon restart.
 - 🔜 Next: commit/push the operations + chaining code (closes the version-skew gap), invite op bots,
   order accuracy after video, then wire the dispatcher's task decomposition + full recovery.
