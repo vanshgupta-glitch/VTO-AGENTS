@@ -31,8 +31,9 @@ const TIMEOUT_MS = 300_000;
 const MAX_BUFFER = 20 * 1024 * 1024;
 
 /** Run the task's prompt on the worker's runtime; returns trimmed stdout. Throws on failure. */
-export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePaths): Promise<string> {
-  const opts = { timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER } as const;
+export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePaths, cwd?: string): Promise<string> {
+  // cwd lets agentic runtimes (openclaw/opencode) actually edit files in the repo under test.
+  const opts = { timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER, cwd };
   if (w.runtime === 'hermes') {
     const bin = paths.hermes;
     if (!bin) throw new Error('hermes path not configured');

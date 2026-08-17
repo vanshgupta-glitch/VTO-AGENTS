@@ -49,8 +49,10 @@ const OP_POST_BOT: Record<string, string> = {
   video: 'videotester',
   accuracy: 'accuracy',
 };
+/** LLM roles without their own Slack bot post under a stand-in (openclaw = Claude-haiku coder → coder). */
+const LLM_POST_BOT: Record<string, string> = { openclaw: 'coder' };
 const postAgentFor = (w: WorkerDef): string =>
-  w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : w.role;
+  w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : (LLM_POST_BOT[w.role] ?? w.role);
 
 function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   switch (w.op) {
@@ -73,7 +75,7 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
 
 /**
  * Advance the engineering loop on success (only for loop-tagged tasks). STRICTLY SEQUENTIAL so each
- * step sees the previous step's fresh output: improve→build→deploy→video→accuracy→report. Accuracy
+ * step sees the previous step's fresh output: improve→implement(OpenClaw)→build→deploy→video→accuracy→report. Accuracy
  * runs only after video, so it analyzes the video tester's just-written logs (not stale ones); it
  * then reports the verdict forward to admin (terminal in this simple chain — the workflow dispatcher
  * owns any below-target loop-back).
@@ -87,7 +89,18 @@ async function chainNext(task: Task, resultText: string): Promise<void> {
     payload: { loop: true, text: p.text, ts: p.ts, file: p.file },
   };
   switch (task.kind) {
-    case 'improve': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
+    case 'improve': {
+      // improve produced the plan; hand it to OpenClaw (Claude haiku, agentic) to actually edit the repo.
+      const implementPrompt =
+        `Implement this VTO change directly in the repo - edit the files, keep it minimal and correct, ` +
+        `then briefly say what you changed:\n\n${resultText}`;
+      await enqueueTask({
+        channel: task.channel, requestedBy: 'loop', role: 'openclaw', kind: 'implement',
+        payload: { loop: true, text: implementPrompt, ts: p.ts, file: p.file },
+      });
+      break;
+    }
+    case 'implement': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
     case 'build': await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' }); break;
     case 'deploy': await enqueueTask({ ...carry, role: 'video', kind: 'video' }); break;
     case 'video': await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' }); break;
@@ -130,6 +143,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         w,
         `${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
         machine.runtimes,
+        machine.repoPath?.replace(/\//g, '\\'), // cwd so agentic coders (openclaw) edit the repo
       );
     }
     await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });

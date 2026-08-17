@@ -197,8 +197,9 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 |---|---|---|
 | admin, researcher | LLM | hermes · `deepseek/deepseek-v4-flash` |
 | critic, coder | LLM | hermes · `qwen/qwen3-coder-flash` |
-| opencode | LLM | opencode · `big-pickle` (free; falls back to OpenClaw/haiku when exhausted) |
-| claude | LLM | claude · `opus-4-8` (judgment/review) |
+| opencode | LLM | opencode · `big-pickle` (free; simple edits / scaffolds; falls back to openclaw/haiku when exhausted) |
+| **openclaw** (`implement`) | LLM | openclaw · `claude-haiku-4-5` — **agentic coder that edits repo files** (runs with `cwd=repoPath`); the loop's implement step for complex coding |
+| claude | LLM | claude · `opus-4-8` (judgment/review; installed, not yet worker-bound) |
 | build, lint, deploy, video, accuracy | operation | `packages/operations` (shell, no LLM) |
 
 ## Autonomy & gates
