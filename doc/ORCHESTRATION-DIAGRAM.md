@@ -197,13 +197,15 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 |---|---|---|
 | admin, researcher | LLM | hermes · `deepseek/deepseek-v4-flash` |
 | critic, coder | LLM | hermes · `qwen/qwen3-coder-flash` |
-| opencode | LLM | opencode · `big-pickle` (free; falls back to OpenClaw/haiku when exhausted) |
-| claude | LLM | claude · `opus-4-8` (judgment/review) |
+| opencode | LLM | opencode · `big-pickle` (free; simple edits / scaffolds; falls back to openclaw/haiku when exhausted) |
+| **openclaw** (`implement`) | LLM | openclaw · `claude-haiku-4-5` — **agentic coder that edits repo files** (runs with `cwd=repoPath`); the loop's implement step for complex coding |
+| claude | LLM | claude · `opus-4-8` (judgment/review; installed, not yet worker-bound) |
 | build, lint, deploy, video, accuracy | operation | `packages/operations` (shell, no LLM) |
 
 ## Autonomy & gates
 
 - **Auto:** code → build → test → accuracy → **deploy to the DEV store** (D-033).
+- **Auto-fix (OpenClaw):** a `build`/`test`/`video` failure is routed to OpenClaw (`claude-haiku`) to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
 - **Human-gated:** git commit/push — halts at a `human_gates` row; **either** operator approves (D-034); the system records the approval, never performs the commit (D-008).
 - **Pre-code critique gate (D-005):** a code task can't be claimed until a passing critique row exists.
 - **Overflow (D-032):** one pool per role; a worker claims only with a free slot; first free worker on either machine wins — implicit, no hand-off messages.
@@ -229,9 +231,11 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
   Per-process pool `max` also lowered (10→4, `SWARM_DB_POOL_MAX` override). *Vansh should switch his own
   `config/.secrets.env` to `:6543` too* — until then his daemon is the only user of the session pool.
 - ⚠️ Known defects from the shakedown: (1) daemon **version skew** across machines breaks chaining until
-  both re-pull; (2) op-persona bots (testrunner/videotester/accuracy) aren't in the channels yet — op
-  results currently post as `admin`; (3) `deploy→video+accuracy` fan-out is parallel, so accuracy can
-  score stale logs (should chain accuracy **after** video); (4) a **stale `opencode` worker** on Vansh's
+  both re-pull; (2) ~~op bots not in channels~~ **FIXED 2026-08-16** — all 10 bots invited to
+  #swarm-command; op results now post under their own identities (build/lint/test→testrunner,
+  video→videotester, accuracy→accuracy, deploy→admin); (3) ~~`deploy→video+accuracy` parallel~~ **FIXED 2026-08-17** — the chain is now strictly
+  sequential `deploy→video→accuracy→report`; accuracy analyzes the fresh video-tester logs, then
+  reports the verdict forward to admin; (4) a **stale `opencode` worker** on Vansh's
   box (busy, heartbeat ~75 min old) — reclaimed by the staleness monitor or a daemon restart.
 - 🔜 Next: commit/push the operations + chaining code (closes the version-skew gap), invite op bots,
   order accuracy after video, then wire the dispatcher's task decomposition + full recovery.

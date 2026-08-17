@@ -51,23 +51,26 @@ interface TaskPayload {
   channel?: string;
   file?: string;
   loop?: boolean;
+  fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
 }
 
 /**
  * Which bot identity an operation worker posts under (LLM workers post under their own role).
- * NOTE: routed through 'admin' for now — the testrunner/videotester/accuracy bots are not members
- * of #swarm-command yet, so their posts fail (not_in_channel). Restore per-persona once invited.
+ * The op-persona bots (testrunner/videotester/accuracy) are now members of #swarm-command, so ops
+ * post under their own identities. `deploy` has no dedicated bot → admin (the orchestrator).
  */
 const OP_POST_BOT: Record<string, string> = {
-  build: 'admin',
-  lint: 'admin',
-  test: 'admin',
-  deploy: 'admin',
-  video: 'admin',
-  accuracy: 'admin',
+  build: 'testrunner',
+  lint: 'testrunner',
+  test: 'testrunner',
+  deploy: 'admin', // no dedicated deploy bot
+  video: 'videotester',
+  accuracy: 'accuracy',
 };
+/** LLM roles without their own Slack bot post under a stand-in (openclaw = Claude-haiku coder → coder). */
+const LLM_POST_BOT: Record<string, string> = { openclaw: 'coder' };
 const postAgentFor = (w: WorkerDef): string =>
-  w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : w.role;
+  w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : (LLM_POST_BOT[w.role] ?? w.role);
 
 function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   switch (w.op) {
@@ -88,21 +91,89 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   }
 }
 
-/** Advance the engineering loop on success (only for loop-tagged tasks). improve→build→deploy→video+accuracy. */
-async function chainNext(task: Task): Promise<void> {
+/**
+ * Advance the engineering loop on success (only for loop-tagged tasks). STRICTLY SEQUENTIAL so each
+ * step sees the previous step's fresh output: improve→implement(OpenClaw)→build→deploy→video→accuracy→report. Accuracy
+ * runs only after video, so it analyzes the video tester's just-written logs (not stale ones); it
+ * then reports the verdict forward to admin (terminal in this simple chain — the workflow dispatcher
+ * owns any below-target loop-back).
+ */
+async function chainNext(task: Task, resultText: string): Promise<void> {
   const p = task.payload as TaskPayload;
   if (!p.loop) return;
   const carry = {
     channel: task.channel,
     requestedBy: 'loop',
-    payload: { loop: true, text: p.text, ts: p.ts, file: p.file },
+    payload: { loop: true, text: p.text, ts: p.ts, file: p.file, fixCount: p.fixCount },
   };
-  if (task.kind === 'improve') await enqueueTask({ ...carry, role: 'build', kind: 'build' });
-  else if (task.kind === 'build') await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' });
-  else if (task.kind === 'deploy') {
-    await enqueueTask({ ...carry, role: 'video', kind: 'video' });
-    await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' });
+  switch (task.kind) {
+    case 'improve': {
+      // improve produced the plan; hand it to OpenClaw (Claude haiku, agentic) to actually edit the repo.
+      const implementPrompt =
+        `Implement this VTO change directly in the repo - edit the files, keep it minimal and correct, ` +
+        `then briefly say what you changed:\n\n${resultText}`;
+      await enqueueTask({
+        channel: task.channel, requestedBy: 'loop', role: 'openclaw', kind: 'implement',
+        payload: { loop: true, text: implementPrompt, ts: p.ts, file: p.file },
+      });
+      break;
+    }
+    case 'implement': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break;
+    case 'fix': await enqueueTask({ ...carry, role: 'build', kind: 'build' }); break; // OpenClaw patched → re-verify from build
+    case 'build': await enqueueTask({ ...carry, role: 'deploy', kind: 'deploy' }); break;
+    case 'deploy': await enqueueTask({ ...carry, role: 'video', kind: 'video' }); break;
+    case 'video': await enqueueTask({ ...carry, role: 'accuracy', kind: 'accuracy' }); break;
+    case 'accuracy': {
+      // Accuracy just analyzed the fresh video-tester results — report the verdict forward to admin.
+      const reportPrompt =
+        `Report this VTO try-on run to the team. The video UI-test ran, then accuracy analyzed its ` +
+        `results:\n\n${resultText}\n\nState whether we hit the 0.98 target vs FittingBox, and if below, ` +
+        `name the single most useful next improvement.`;
+      await enqueueTask({
+        channel: task.channel,
+        requestedBy: 'loop',
+        role: 'admin',
+        kind: 'report',
+        payload: { loop: false, text: reportPrompt, ts: p.ts },
+      });
+      break;
+    }
   }
+}
+
+/** Max OpenClaw auto-fix attempts per loop run before it halts for a human. */
+const MAX_FIX_ATTEMPTS = 2;
+
+/**
+ * On a loop step failing, route the error to OpenClaw to diagnose + patch the repo, then re-enter the
+ * loop at build. Only for steps a code patch can fix (build/test/video), and capped so it can't spin.
+ */
+async function chainOnFailure(task: Task, failureText: string): Promise<void> {
+  const p = task.payload as TaskPayload;
+  if (!p.loop) return;
+  if (!['build', 'test', 'video'].includes(task.kind)) return;
+  const fixCount = p.fixCount ?? 0;
+  if (fixCount >= MAX_FIX_ATTEMPTS) {
+    if (task.channel) {
+      await enqueuePost({
+        channel: task.channel,
+        agent: 'admin',
+        text: `:octagonal_sign: loop halted at *${task.kind}* after ${fixCount} OpenClaw fix attempts — needs a human.`,
+        threadTs: p.ts ?? null,
+      });
+    }
+    return;
+  }
+  const fixPrompt =
+    `The VTO engineering loop FAILED at the "${task.kind}" step. Diagnose the root cause and FIX it ` +
+    `directly in the repo (edit files, keep the change minimal), then say what you changed:\n\n${failureText}`;
+  await enqueueTask({
+    channel: task.channel,
+    requestedBy: 'loop',
+    role: 'openclaw',
+    kind: 'fix',
+    payload: { loop: true, text: fixPrompt, ts: p.ts, file: p.file, fixCount: fixCount + 1 },
+  });
 }
 
 async function handleTask(w: WorkerDef, task: Task): Promise<void> {
@@ -136,6 +207,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         w,
         `${kit}${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
         machine.runtimes,
+        machine.repoPath?.replace(/\//g, '\\'), // cwd so agentic coders (openclaw) edit the repo
       );
     }
     await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });
@@ -154,7 +226,8 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       });
     }
     console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
-    if (ok) await chainNext(task);
+    if (ok) await chainNext(task, text);
+    else await chainOnFailure(task, text);
   } catch (e) {
     const msg = (e as Error).message;
     await finishTask(task.id, workerId(w), 'failed', null, msg);
@@ -167,6 +240,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       });
     }
     console.warn(`[daemon] ${w.role} ERROR task ${task.id}: ${msg.slice(0, 200)}`);
+    await chainOnFailure(task, msg);
   }
 }
 

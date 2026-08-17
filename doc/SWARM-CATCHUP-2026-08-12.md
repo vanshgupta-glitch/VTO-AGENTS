@@ -43,6 +43,23 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 6. Start your gateway too (dual-peer): `npx tsx apps/bridge/src/gateway.ts` — it's now safe to run on
    both machines. (Ping Rohit to make sure exactly one gateway per machine, two total.)
 
+## OpenClaw implement stage — REQUIRES a per-machine config addition
+
+The loop now inserts an `implement` stage run by **OpenClaw** (Claude haiku, agentic) between `improve`
+and `build` — OpenClaw edits the repo files directly, so the loop actually produces code, not just text
+suggestions. The cheap `improve` step (hermes) plans; OpenClaw implements. It runs with `cwd = repoPath`.
+OpenClaw also handles **fix-on-failure**: if `build`/`test`/`video` fails, the error is routed to OpenClaw
+to patch the repo, then the loop re-enters at `build` — capped at 2 attempts, then it halts for a human.
+
+Because `config/machine.local.json` is git-ignored (per-machine), **you must add the worker on your
+machine** or `implement` tasks are never claimed and the loop stalls after `improve`:
+
+```json
+{ "role": "openclaw", "runtime": "openclaw", "agent": "coder", "maxConcurrent": 1 }
+```
+
+Add it to the `workers` array, and confirm `runtimes.openclaw` points at your `openclaw.ps1`.
+
 ## File manifest (vault-root-relative)
 
 | Path | Change |
