@@ -34,6 +34,16 @@ export async function closePool(): Promise<void> {
   }
 }
 
+/**
+ * Try to acquire/renew a named singleton lease. Returns true iff this `holder` now owns an unexpired
+ * lease. Used to make the dispatcher a singleton (two would double-create stage tasks): renew each tick;
+ * if the holder dies, the lease expires after `ttlSecs` and a standby takes over. See migration 0005.
+ */
+export async function acquireLease(name: string, holder: string, ttlSecs: number): Promise<boolean> {
+  const r = await getPool().query<{ ok: boolean }>(`select vto_acquire_lease($1, $2, $3) as ok`, [name, holder, ttlSecs]);
+  return r.rows[0]?.ok ?? false;
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface Task {
   id: number;
