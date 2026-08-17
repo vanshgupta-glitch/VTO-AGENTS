@@ -43,29 +43,36 @@ extension, the `vto_*` functions, and `runs.msg_id`. You only need to **pull the
 6. Start your gateway too (dual-peer): `npx tsx apps/bridge/src/gateway.ts` — it's now safe to run on
    both machines. (Ping Rohit to make sure exactly one gateway per machine, two total.)
 
-## OpenClaw implement/fix — ⚠️ DISABLED pending a workspace redesign. Do NOT enable yet.
+## OpenClaw implement/fix — workspace-SYNC design (re-enabled, safe)
 
-The loop's `implement` (OpenClaw between `improve`→`build`) and `fix-on-failure` stages are wired
-(`chainNext`, `MAX_FIX_ATTEMPTS`), and the `runtimes.ts` adapter is now correct
-(`openclaw agent --local --agent <id> --message-file <f>`). **But the OpenClaw worker is REMOVED from
-config and must stay removed until the workspace model is fixed.**
+The loop's `implement` (OpenClaw between `improve`→`build`) and `fix-on-failure` stages run via OpenClaw
+(`openclaw agent --local --agent <id> --message-file <f>`). **Critical:** an OpenClaw agent treats its
+`--workspace` as its OWN home — on first run it **scaffolds `SOUL.md`/`IDENTITY.md`/`AGENTS.md`/… and
+`git init`s that directory**. Pointing it at the live repo destroys it (learned live 2026-08-17: it
+polluted `rkumar-vto` + nested-`.git`-shadowed the real repo — recovered because `rkumar-vto` is a subdir
+of the `nmg-vto` repo whose `.git` was intact).
 
-**Why (learned live, 2026-08-17):** an OpenClaw agent treats its `--workspace` as its OWN home — on its
-first run it **scaffolds files (`SOUL.md`/`IDENTITY.md`/`AGENTS.md`/`TOOLS.md`/…) and `git init`s that
-directory**. Pointing an agent's workspace at the live `rkumar-vto` polluted the repo and created a nested
-`.git` shadowing the real one. (Recovered fully — `rkumar-vto` is a subdir of the `nmg-vto` repo, whose
-`.git` held the true history; deleting the nested `.git` + the scaffolding restored everything.)
+**So the agent's workspace is a DEDICATED dir, and `runtimes.ts` mirrors code around each run:**
+1. `mirrorDirs(repo → workspace, SYNC_DIRS)` — robocopy `packages/`+`extensions/`+`app/` INTO the
+   workspace (excludes `node_modules`/`dist`/`build`/`.git`) so OpenClaw sees current code.
+2. run `openclaw agent --local --agent <id> …` with `cwd = workspace` (it edits there, scaffolds there).
+3. `mirrorDirs(workspace → repo, SYNC_DIRS)` — copy OpenClaw's edits BACK into the build repo so `build`
+   compiles them, and the human reviews the diff. Scaffolding stays in the workspace (SYNC_DIRS excludes root).
 
-- **NEVER point an OpenClaw agent's workspace at your live repo.** Vansh's existing `vto-coder` agent
-  points at your live `rkumar_vto` — **repoint it to a throwaway dir** (edit `~/.openclaw/openclaw.json`
-  `agents.list[].workspace`) before running any OpenClaw agent, or it will scaffold + `git init` your repo.
-- Do **not** `openclaw agents delete <name>` while its workspace is a real dir — it *prunes the workspace*
-  (could delete your files). Repoint the workspace first, then delete if desired.
-- **Open design item:** for the implement/fix stages to edit the build repo safely, OpenClaw needs a
-  *dedicated* workspace (a clone/worktree of rkumar-vto) with changes synced back into the build tree —
-  not the live repo. Until that exists, leave the `openclaw` worker OUT of `machine.local.json`.
+**Per-machine setup:**
+- Create a dedicated-workspace agent (workspace **NOT** your repo): `openclaw agents add vto-coder-<you>
+  --workspace "C:/.../openclaw-ws/vto-coder-<you>" --model anthropic/claude-haiku-4-5 --non-interactive`.
+- Add the worker with the matching `workspace` field (git-ignored `machine.local.json`):
+  ```json
+  { "role": "openclaw", "runtime": "openclaw", "agent": "vto-coder-<you>", "workspace": "C:/.../openclaw-ws/vto-coder-<you>", "maxConcurrent": 1 }
+  ```
+- Confirm `openclaw models status` shows the claude-cli/Anthropic provider authed (`--local` needs it).
+- **⚠️ Vansh:** your existing `vto-coder` agent points at your LIVE `rkumar_vto`. Repoint its `workspace`
+  in `~/.openclaw/openclaw.json` to a throwaway dir BEFORE running it, or it will scaffold + `git init`
+  your repo. Never `openclaw agents delete` while a workspace is a real dir — it *prunes* (deletes) it.
 
-*(The old "add an openclaw worker with agent vto-coder-<you>" instructions are retired by the above.)*
+*(Caveat: the mirror is additive (robocopy `/E`, no delete), so a file OpenClaw DELETES won't propagate —
+fine for the edit/add changes the loop makes. Rohit's agent = `vto-coder-rohit`, workspace `~/openclaw-ws/`.)*
 
 Confirm `runtimes.openclaw` points at your `openclaw.ps1`, and `openclaw models status` shows the
 claude-cli/Anthropic provider authed (`--local` needs it). Rohit's agent = `vto-coder-rohit`; the shared

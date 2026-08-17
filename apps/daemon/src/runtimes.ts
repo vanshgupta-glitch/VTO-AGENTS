@@ -5,7 +5,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -21,6 +21,7 @@ export interface WorkerDef {
   profile?: string; // hermes
   model?: string; // claude / opencode
   agent?: string; // openclaw
+  workspace?: string; // openclaw: dedicated workspace dir (NEVER the live repo) — synced to/from repo
   op?: 'build' | 'lint' | 'test' | 'deploy' | 'video' | 'accuracy'; // runtime === 'operation'
   maxConcurrent: number;
 }
@@ -30,6 +31,36 @@ export type RuntimePaths = Partial<Record<RuntimeName, string>>;
 const TIMEOUT_MS = 600_000; // agentic runtimes (hermes profiles, openclaw) need room on complex tasks
 const MAX_BUFFER = 20 * 1024 * 1024;
 
+// Source dirs the OpenClaw workspace mirrors to/from the build repo (code only — not build artifacts).
+const SYNC_DIRS = ['packages', 'extensions', 'app'];
+
+/**
+ * Mirror source subdirs from `src` into `dst` with robocopy, excluding build artifacts + git. Used to
+ * sync the build repo <-> the OpenClaw agent's DEDICATED workspace around a run — OpenClaw scaffolds +
+ * git-inits its workspace, so it must NEVER be the live repo (see doc/SWARM-CATCHUP). robocopy exit
+ * codes 0-7 mean success (copied / nothing to do); >=8 is a real error.
+ */
+async function mirrorDirs(src: string, dst: string, dirs: string[]): Promise<void> {
+  const bs = (p: string): string => p.replace(/\//g, '\\');
+  for (const d of dirs) {
+    if (!existsSync(join(src, d))) continue;
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'robocopy',
+        [bs(join(src, d)), bs(join(dst, d)), '/E', '/XD', 'node_modules', 'dist', 'build', '.git',
+          '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/R:1', '/W:1'],
+        { timeout: 180_000, windowsHide: true, maxBuffer: MAX_BUFFER },
+        (err) => {
+          if (!err) return resolve();
+          const code = (err as NodeJS.ErrnoException & { code?: number | string }).code;
+          if (typeof code === 'number' && code < 8) return resolve(); // robocopy 0-7 = success
+          reject(new Error(`robocopy ${d} failed (code ${String(code)})`));
+        },
+      );
+    });
+  }
+}
+
 /** Run the task's prompt on the worker's runtime; returns trimmed stdout. Throws on failure. */
 export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePaths, cwd?: string): Promise<string> {
   // cwd lets agentic runtimes (openclaw/opencode) actually edit files in the repo under test.
@@ -37,7 +68,9 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'hermes') {
     const bin = paths.hermes;
     if (!bin) throw new Error('hermes path not configured');
-    const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt], opts);
+    // --ignore-rules: skip AGENTS.md/SOUL/memory/skills injection so the loop's LLM steps answer
+    // directly instead of doing multi-minute agentic file exploration (11s vs >5min, measured).
+    const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt, '--ignore-rules'], opts);
     return stripAnsi(stdout).trim();
   }
   if (w.runtime === 'claude') {
@@ -59,16 +92,20 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'openclaw') {
     const bin = paths.openclaw;
     if (!bin) throw new Error('openclaw path not configured');
+    const ws = w.workspace; // the agent's DEDICATED workspace (matches openclaw.json), never the repo
+    // Sync the build repo's source INTO the workspace so OpenClaw edits the current code.
+    if (ws && cwd) await mirrorDirs(cwd, ws, SYNC_DIRS);
     const dir = mkdtempSync(join(tmpdir(), 'swarm-'));
     const pf = join(dir, 'prompt.txt');
     writeFileSync(pf, prompt, 'utf8');
-    // OpenClaw CLI: the `agent` subcommand, run embedded (--local), targeting an agent id whose
-    // workspace IS the repo under test. (The old `--agent <name> --prompt-file` form was invalid —
-    // openclaw parsed the agent name as a command: "Unknown command: openclaw coder".)
+    // OpenClaw CLI: the `agent` subcommand, embedded (--local), targeting an agent id. (The old
+    // `--agent <name> --prompt-file` form was invalid — openclaw read the name as a command.)
     const args = ['-NoProfile', '-File', bin, 'agent', '--local', '--agent', w.agent ?? w.role,
       '--message-file', pf, '--timeout', '580'];
     if (w.model) args.push('--model', w.model);
-    const { stdout } = await execFileP('powershell.exe', args, opts);
+    const { stdout } = await execFileP('powershell.exe', args, ws ? { ...opts, cwd: ws } : opts);
+    // Sync OpenClaw's edits back OUT of the workspace into the build repo so `build` compiles them.
+    if (ws && cwd) await mirrorDirs(ws, cwd, SYNC_DIRS);
     return stripAnsi(stdout).trim();
   }
   throw new Error(`unknown runtime ${String(w.runtime)}`);
