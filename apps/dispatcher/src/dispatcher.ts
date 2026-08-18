@@ -55,6 +55,24 @@ function isPass(text: string): boolean {
 }
 
 function stageText(def: WorkflowDef, stage: Stage, run: WorkflowRun, extra?: string): string {
+  const doc = run.carry['taskDoc'] as string | undefined;
+  if (doc) {
+    // Doc-driven: hand the agent the shared file by PATH — keeps the prompt tiny (no giant carry blob,
+    // which is what overran hermes). The agent reads the doc, does its part, and updates its section.
+    const who = stage.executor.kind === 'agent' ? stage.executor.role : 'stage';
+    const produce = stage.produces ? `Produce the ${stage.produces}.` : 'Complete this stage.';
+    const decide = stage.transitions.on_decision
+      ? ` Then, based only on the evidence in the doc, END your reply with exactly one line: "DECISION: ${Object.keys(stage.transitions.on_decision).join(' or ')}".`
+      : '';
+    return [
+      `You are the ${who} agent in the ${def.name}.`,
+      run.goal ? `Goal: ${run.goal}` : '',
+      `The shared task file is "${doc}" (relative to your current working directory).`,
+      `FIRST read that file. ${produce} Do the work directly in the repo where relevant.`,
+      `THEN update "${doc}": append/refresh your "## ${stage.id}" section with what you did or found so the next agent can pick it up. Keep your chat reply to a short status.${decide}`,
+      extra ?? '',
+    ].filter(Boolean).join('\n\n');
+  }
   const carry = Object.keys(run.carry).length > 0 ? `\n\nEvidence so far:\n${JSON.stringify(run.carry)}` : '';
   const goal = run.goal ? `\n\nGoal: ${run.goal}` : '';
   const prompt = stage.produces
@@ -78,7 +96,7 @@ async function createStageWork(run: WorkflowRun, stage: Stage): Promise<number> 
     stage: stage.id,
     role: stage.executor.kind === 'agent' ? stage.executor.role : stage.executor.op,
     kind: stage.executor.kind === 'operation' ? stage.executor.op : stage.id.toLowerCase(),
-    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel, pinnedMachine: run.carry['pinnedMachine'] },
+    payload: { text: stageText(WORKFLOWS[run.workflow]!, stage, run, extra), goal: run.goal, channel: run.channel, pinnedMachine: run.carry['pinnedMachine'], taskDoc: run.carry['taskDoc'] },
     needsCritique: stage.gate === 'critique',
     channel: run.channel,
   });
@@ -123,6 +141,23 @@ async function routeTo(run: WorkflowRun, def: WorkflowDef, stage: Stage, role: s
 async function applyResult(run: WorkflowRun, def: WorkflowDef, stage: Stage, task: WorkflowTask, ok: boolean, output: string): Promise<void> {
   const failTarget = stage.transitions.on_fail ?? 'escalate';
   if (ok) {
+    // Doc-driven decision routing (ROUTE → RESEARCH vs EXECUTE), with a hard cap of 2 research rounds.
+    if (stage.transitions.on_decision) {
+      const m = output.match(/DECISION:\s*([A-Za-z_]+)/i);
+      let key = (m?.[1] ?? '').toUpperCase();
+      const rounds = (run.carry['research_rounds'] as number | undefined) ?? 0;
+      if (key === 'RESEARCH' && rounds >= 2) key = 'EXECUTE'; // enough research → execute
+      const target = stage.transitions.on_decision[key];
+      if (target) {
+        const nextCarry: Record<string, unknown> = { ...run.carry, last_artifact: output.slice(0, 2000) };
+        if (key === 'RESEARCH') nextCarry['research_rounds'] = rounds + 1;
+        await updateWorkflowRun(run.id, { carry: nextCarry });
+        await post(stage.id, output.slice(0, 1500), run);
+        await post('DECISION', `${stage.id}: ${key} → ${target}`, run);
+        return advanceTo(run, def, target, `decision ${key}`);
+      }
+      // unparseable decision → fall through to on_success
+    }
     if (stage.transitions.below_target) {
       const m = output.match(/accuracy\s*=\s*(\d+(?:\.\d+)?)/i) ?? output.match(/(\d+(?:\.\d+)?)\s*%/);
       const score = m ? Number(m[1]) : null;
@@ -134,6 +169,7 @@ async function applyResult(run: WorkflowRun, def: WorkflowDef, stage: Stage, tas
       }
     }
     await updateWorkflowRun(run.id, { carry: { ...run.carry, last_artifact: output.slice(0, 2000) } });
+    await post(stage.id, output.slice(0, 1500), run); // the agent's OWN output → Slack (the user watches there)
     return advanceTo(run, def, stage.transitions.on_success, `${stage.id} ok`);
   }
   const reason = `stage ${stage.id} failed: ${output.slice(0, 400) || (task.last_error ?? 'no output')}`;
@@ -255,6 +291,9 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
   // so spawn a fresh attempt. This is what lets a critique BLOCK loop back (PLAN→ANALYSE→…→PLAN).
   if (!task || task.status === 'blocked') {
     const id = await createStageWork(run, stage);
+    const ex = stage.executor;
+    const who = ex.kind === 'agent' ? ex.role : ex.kind === 'operation' ? ex.op : 'human';
+    await post(`▶ ${stage.id}`, `${who} working…`, run); // heartbeat: stage begun → visible progress in Slack
     if (stage.gate === 'critique') {
       const gated = await getStageTask(run.id, stageId);
       if (gated) await handleCritiqueGate(run, def, stage, gated);
@@ -300,14 +339,19 @@ async function intake(): Promise<void> {
     const trig = await claimWorkflowTrigger();
     if (!trig) break;
     const p = (trig.payload ?? {}) as { workflow?: string; goal?: string; channel?: string; pinnedMachine?: string };
-    const wf = typeof p.workflow === 'string' && p.workflow in WORKFLOWS ? p.workflow : 'improvement-loop';
+    const wf = typeof p.workflow === 'string' && p.workflow in WORKFLOWS ? p.workflow : 'doc-loop';
     const run = await createWorkflowRun({
       workflow: wf,
       goal: p.goal ?? (trig.requested_by ? `triggered by ${trig.requested_by}` : 'no goal'),
       channel: trig.channel ?? p.channel ?? null,
     });
-    // Pin the whole workflow to its origin machine (the gateway that ingested the Slack trigger).
-    if (p.pinnedMachine) await updateWorkflowRun(run.id, { carry: { ...run.carry, pinnedMachine: p.pinnedMachine } });
+    // Pin the whole workflow to its origin machine (the gateway that ingested the Slack trigger), and
+    // for doc-driven workflows give it a shared per-run task file (repo-relative → resolves on origin,
+    // where every hard-pinned stage runs, so all agents read/write the same local .md).
+    const carry: Record<string, unknown> = { ...run.carry };
+    if (p.pinnedMachine) carry.pinnedMachine = p.pinnedMachine;
+    if (WORKFLOWS[wf]?.docDriven) carry.taskDoc = `.swarm-tasks/run-${run.id}.md`;
+    if (Object.keys(carry).length) await updateWorkflowRun(run.id, { carry });
     await finishTrigger(trig.id, run.id);
     await post('START', `${wf} started — run #${run.id}`, run);
     console.log(`[dispatcher] run #${run.id} ${wf} started (trigger task #${trig.id})`);

@@ -103,7 +103,7 @@ async function onEvent(args: { event?: SlackEvent; ack?: () => Promise<void> }):
     await enqueueTask({
       role: 'admin',
       kind: 'workflow',
-      payload: { workflow: 'improvement-loop', goal: wfMatch[1].trim(), channel: event.channel, pinnedMachine: MACHINE_KEY },
+      payload: { workflow: 'doc-loop', goal: wfMatch[1].trim(), channel: event.channel, pinnedMachine: MACHINE_KEY },
       channel: event.channel ?? null,
       requestedBy: event.user ?? null,
     });

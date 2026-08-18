@@ -5,6 +5,8 @@
  * cross-machine overflow physically happens: whichever machine has a free worker claims next.
  */
 import { hostname } from 'node:os';
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import {
   registerMachine,
   registerWorker,
@@ -39,6 +41,29 @@ interface TaskPayload {
   fixCount?: number; // OpenClaw auto-fix attempts used so far in this loop run
   pinnedMachine?: string; // HARD pin — the chain runs ONLY on this machine (Slack work + the code loop)
   preferMachine?: string; // SOFT pin — this machine's agents get first dibs; overflow to others after a grace
+  taskDoc?: string; // doc-loop: the shared per-run .md this stage reads + updates (repo-relative path)
+  goal?: string; // the run's goal — seeds the task-doc skeleton the first time it's materialised
+}
+
+/**
+ * doc-loop: materialise the shared per-run task .md (repo-relative) if it doesn't exist yet, so the
+ * admin/SEED agent has a skeleton to fill and every later stage reads + updates the SAME local file.
+ * All doc-loop stages are hard-pinned to the origin machine, so this file is shared across them.
+ */
+function ensureTaskDoc(cwd: string, rel: string, goal: string): void {
+  const abs = join(cwd, rel);
+  if (existsSync(abs)) return;
+  mkdirSync(dirname(abs), { recursive: true });
+  const skel = [
+    `# Task: ${goal || '(no goal)'}`,
+    '',
+    '> Shared swarm task file. Each agent READS this, does its part, and UPDATES its own `## <STAGE>` section so the next agent can pick it up.',
+    '',
+    '## Goal', goal || '', '',
+    '## Context', '_(admin: known state, constraints, success criteria)_', '',
+    '## SEED', '', '## ROUTE', '', '## RESEARCH', '', '## CODE', '', '## REPORT', '',
+  ].join('\n');
+  writeFileSync(abs, skel, 'utf8');
 }
 
 /**
@@ -177,13 +202,14 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       const secs = Math.round(res.durationMs / 1000);
       text = `*[${res.op}]* ${res.summary}  _(${secs}s)_${ok ? '' : `\n\`\`\`${res.tail.slice(-900)}\`\`\``}`;
     } else {
+      const cwd = machine.repoPath?.replace(/\//g, '\\') ?? process.cwd(); // cwd so agents edit the repo
       const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
-      text = await runRuntime(
-        w,
-        `${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
-        machine.runtimes,
-        machine.repoPath?.replace(/\//g, '\\'), // cwd so agentic coders (openclaw) edit the repo
-      );
+      // doc-loop: make sure the shared task file exists locally before the agent reads it by path.
+      if (payload.taskDoc) ensureTaskDoc(cwd, payload.taskDoc, payload.goal ?? base);
+      const persona = payload.taskDoc
+        ? `\n\n(You are the VTO ${w.role} agent. Coordinate through the task file: read it, do your part in the repo, and update it. Keep your chat reply to a short status.)`
+        : `\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`;
+      text = await runRuntime(w, `${base}${persona}`, machine.runtimes, cwd);
     }
     await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });
     if (task.channel) {

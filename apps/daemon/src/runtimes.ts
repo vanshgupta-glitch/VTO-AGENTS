@@ -70,8 +70,18 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
     if (!bin) throw new Error('hermes path not configured');
     // --ignore-rules: skip AGENTS.md/SOUL/memory/skills injection so the loop's LLM steps answer
     // directly instead of doing multi-minute agentic file exploration (11s vs >5min, measured).
-    const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt, '--ignore-rules'], opts);
-    return stripAnsi(stdout).trim();
+    try {
+      const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt, '--ignore-rules'], opts);
+      return stripAnsi(stdout).trim();
+    } catch (e) {
+      // hermes prints the FULL answer to stdout, then sometimes crashes on teardown (exit
+      // 0xC0000005 / access violation, empty stderr — an intermittent native shutdown race). The
+      // work is DONE, so salvage stdout on a non-timeout dirty exit instead of failing the stage.
+      const err = e as NodeJS.ErrnoException & { stdout?: string; killed?: boolean };
+      const out = stripAnsi(String(err.stdout ?? '')).trim();
+      if (out && !err.killed) return out;
+      throw e;
+    }
   }
   if (w.runtime === 'claude') {
     const bin = paths.claude;

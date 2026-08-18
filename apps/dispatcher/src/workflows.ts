@@ -21,6 +21,9 @@ export interface Stage {
     on_stuck?: string;
     on_empty?: string;
     below_target?: { target: string; carry?: string[] };
+    // Doc-driven routing: the agent ends its reply with "DECISION: <KEY>"; the dispatcher routes to
+    // on_decision[KEY] (falls back to on_success). Lets hermes choose research-more vs execute.
+    on_decision?: Record<string, string>;
   };
 }
 
@@ -28,6 +31,9 @@ export interface WorkflowDef {
   name: string;
   entry: string;
   stages: Record<string, Stage>;
+  /** doc-driven: agents coordinate through a shared per-run .md task file (passed by path), not by
+   *  stuffing each prior artifact into the next prompt. Keeps prompts tiny + lets agents read/edit. */
+  docDriven?: boolean;
 }
 
 const agent = (role: string) => ({ kind: 'agent', role } as const);
@@ -163,7 +169,74 @@ const recoveryLoop: WorkflowDef = {
   },
 };
 
+/**
+ * doc-loop — the DOCUMENT-DRIVEN engineering loop (the requested flow):
+ *   SEED (admin creates the task .md) → ROUTE (hermes reads it, analyses code via mem0, and DECIDES
+ *   research-more vs execute) → RESEARCH (updates the doc, back to ROUTE) or CODE (executes from the
+ *   doc's plan) → BUILD → TEST → REPORT → HUMAN_GATE.
+ * Every agent stage is handed the SAME shared .md by path (run.carry.taskDoc); it reads the doc, does
+ * its part, and updates its section so the next agent picks up. All stages are hard-pinned to the
+ * origin machine, so they share one local file (accessed locally, executed through the gateway).
+ */
+const docLoop: WorkflowDef = {
+  name: 'doc-loop',
+  entry: 'SEED',
+  docDriven: true,
+  stages: {
+    SEED: {
+      id: 'SEED',
+      executor: agent('admin'),
+      produces: 'task_document',
+      // The daemon materialises the .md skeleton; admin fills Goal/Context/success-criteria.
+      transitions: { on_success: 'ROUTE', on_empty: 'ROUTE' },
+    },
+    ROUTE: {
+      id: 'ROUTE',
+      executor: agent('admin'),
+      produces: 'decision',
+      // hermes decides; the dispatcher caps research at 2 rounds then forces EXECUTE.
+      transitions: { on_success: 'CODE', on_empty: 'CODE', on_decision: { RESEARCH: 'RESEARCH', EXECUTE: 'CODE' } },
+    },
+    RESEARCH: {
+      id: 'RESEARCH',
+      executor: agent('researcher'),
+      produces: 'research_findings',
+      transitions: { on_success: 'ROUTE', on_empty: 'ROUTE' },
+    },
+    CODE: {
+      id: 'CODE',
+      executor: agent('coder'),
+      produces: 'code_changes',
+      transitions: { on_success: 'BUILD', on_fail: 'ROUTE', on_empty: 'ROUTE' },
+    },
+    BUILD: {
+      id: 'BUILD',
+      executor: op('build'),
+      produces: 'build_result',
+      transitions: { on_success: 'TEST', on_fail: 'route:coder' },
+    },
+    TEST: {
+      id: 'TEST',
+      executor: op('test'),
+      produces: 'test_result',
+      transitions: { on_success: 'REPORT', on_fail: 'route:coder' },
+    },
+    REPORT: {
+      id: 'REPORT',
+      executor: agent('admin'),
+      produces: 'report',
+      transitions: { on_success: 'HUMAN_GATE' },
+    },
+    HUMAN_GATE: {
+      id: 'HUMAN_GATE',
+      executor: { kind: 'human' },
+      transitions: { on_success: 'end', on_fail: 'halt' },
+    },
+  },
+};
+
 export const WORKFLOWS: Record<string, WorkflowDef> = {
+  'doc-loop': docLoop,
   'improvement-loop': improvementLoop,
   'research-loop': researchLoop,
   'recovery-loop': recoveryLoop,
