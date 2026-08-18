@@ -33,16 +33,21 @@ const inFlight = new Map<string, number>();
 
 const workerId = (w: WorkerDef): string => `${MACHINE_ID}:${w.role}`;
 
-// Claude Code is the only runtime that gets its full identity injected: `claude -p` spawns a fresh
-// process with no memory, so the strategist soul + orchestration skill must travel with the prompt.
+// EVERY runtime spawns a fresh process with no memory, and hermes additionally runs with
+// `--ignore-rules` (see runtimes.ts) which skips SOUL/skills injection for latency. So an agent's
+// identity reaches the model ONLY if it travels with the prompt. This used to be claude-only, which
+// left every other role running on the one-line "You are the VTO <role> agent" suffix alone: `admin`
+// ran git and closed work it had not done, both of which soul/admin.md forbids in as many words.
+// Claude additionally carries the orchestration skill. Re-read per task so souls can be hot-edited.
 const VAULT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-function claudeKit(): string {
+function agentKit(role: string): string {
   try {
-    const soul = readFileSync(resolve(VAULT, 'soul/claude.md'), 'utf8');
+    const soul = readFileSync(resolve(VAULT, `soul/${role}.md`), 'utf8');
+    if (role !== 'claude') return soul;
     const skill = readFileSync(resolve(VAULT, 'skills/vto/claude-orchestration/SKILL.md'), 'utf8');
     return `${soul}\n\n--- CLAUDE ORCHESTRATION SKILL (follow it) ---\n${skill}`;
   } catch (e) {
-    console.warn('[daemon] could not load claude kit:', (e as Error).message);
+    console.warn(`[daemon] could not load ${role} kit:`, (e as Error).message);
     return '';
   }
 }
@@ -221,13 +226,20 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       text = `*[${res.op}]* ${res.summary}  _(${secs}s)_${ok ? '' : `\n\`\`\`${res.tail.slice(-900)}\`\`\``}`;
     } else {
       const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
-      const kit = w.role === 'claude' ? `${claudeKit()}\n\n` : '';
+      const soul = agentKit(w.role);
+      const kit = soul ? `${soul}\n\n` : '';
       text = await runRuntime(
         w,
         `${kit}${base}\n\n(You are the VTO ${w.role} agent. Respond concisely, for a Slack reply.)`,
         machine.runtimes,
         machine.repoPath?.replace(/\//g, '\\'), // cwd so agentic coders (openclaw) edit the repo
       );
+      // A runtime that exits 0 having produced nothing has not done the work. `ok` was initialised
+      // true and only ever reassigned in the `operation` branch, so every LLM task was marked `done`
+      // on exit code alone — including ones whose whole reply was stripped as progress chatter, which
+      // then posted the literal string "(empty)" to Slack below. Trim-empty only: the gateway health
+      // check answers "OK WORKING from <role>", so any length floor above zero fails valid replies.
+      ok = text.trim().length > 0;
     }
     await finishTask(task.id, workerId(w), ok ? 'done' : 'failed', { ok, text });
     if (task.channel) {

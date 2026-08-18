@@ -6,6 +6,9 @@ ORCHESTRATION-ARCHIVE.md
 # never commit rendered secrets or local state
 .env
 *.secrets.env
+# ad-hoc debugging scripts — written with live connection strings pasted inline
+temp_query.mjs
+*.local.mjs
 data/
 node_modules/
 config/machine.local.json
