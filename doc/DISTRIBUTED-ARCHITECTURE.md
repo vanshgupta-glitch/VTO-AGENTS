@@ -1,5 +1,12 @@
 # DISTRIBUTED-ARCHITECTURE.md — Multi-Machine VTO Swarm (v0.1, draft for review)
 
+> **OPERATIONAL STATUS (2026-08-25):** the fleet currently runs SINGLE-MACHINE on Rohit's box
+> (NMG-D-82): one gateway + one dispatcher (singleton lease) + one daemon. Vansh's machine
+> (nmg-d-102) has been offline since 2026-08-21 and still runs pre-pgmq code — before it rejoins:
+> pull the vault, rebuild, kill all old daemons (cutover rule), and only then does D-036
+> dual-gateway apply again. Until that cutover, treat every "both machines" claim below as design,
+> not as the live deployment.
+
 Extends `TECHNICAL-ARCHITECTURE.md` (TAD v3.0). Where they conflict on the single-machine
 assumption, THIS doc governs the multi-machine deployment; everything else in the TAD stands.
 Status: **design only, awaiting Rohit's review — no code yet.**

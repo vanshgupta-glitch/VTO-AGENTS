@@ -10,3 +10,8 @@ data/
 node_modules/
 config/machine.local.json
 dist/
+
+# build + run artifacts
+*.tsbuildinfo
+logs/
+

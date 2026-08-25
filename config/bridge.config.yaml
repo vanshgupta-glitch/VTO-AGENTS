@@ -52,16 +52,21 @@ bridge:
 
     coder:
       token_env: SLACK_BOT_CODER
-      runtime: hermes
-      model: openrouter/qwen/qwen3-coder-flash
+      runtime: openclaw            # 2026-08-25: coder moved off hermes/qwen onto OpenClaw (Haiku)
+      openclaw_agent: vto-coder-rohit
+      model: claude-haiku-4-5
       channels: [swarm-code, swarm-admin, swarm-critique, swarm-tests, swarm-video]
       context_policy: discipline
       capabilities: [code.implement, code.refactor, code.debug, code.scaffold, test.triage]
       requires_precode_critique: true
-      executor:
-        agent: openclaw
-        max_concurrent: 2
-        timeout_seconds: 900
+
+    docsmanager:
+      token_env: SLACK_BOT_DOCSMANAGER
+      runtime: hermes
+      model: openrouter/deepseek/deepseek-v4-flash
+      channels: [swarm-docs, swarm-admin, swarm-command, swarm-incidents]
+      context_policy: discipline
+      capabilities: [context.ledger, context.handoff, context.checkpoint, compaction.watch, staleness.watch]
 
     openclaw:
       token_env: SLACK_BOT_OPENCLAW
@@ -70,6 +75,15 @@ bridge:
       channels: [swarm-code, swarm-admin, swarm-critique, swarm-tests, swarm-video, swarm-human-gate]
       context_policy: full
       capabilities: [code.implement, code.refactor, code.debug, code.scaffold]
+
+    analyst:
+      token_env: SLACK_BOT_CLAUDE   # Opus-tier identity; no dedicated Slack app yet
+      runtime: openclaw
+      openclaw_agent: vto-analyst
+      model: claude-opus-4-8
+      channels: [swarm-analysis, swarm-accuracy, swarm-video]
+      context_policy: documents-only
+      capabilities: [analysis.lap-verdict, interpret.verification, report.compile]
 
     opencode:
       token_env: SLACK_BOT_OPENCODE
@@ -108,6 +122,10 @@ bridge:
 
   # Loop control
   loop:
+    # Main engineering loop (2026-08-25): doc-loop — ADMIN→TASKS→SUBTASKS→RESEARCH→CRITIC→CODE→
+    # BUILD→CODE_TEST→DEPLOY(dev store)→VIDEO_UI_TEST(60s/clip vs the just-deployed code)→RESULTS→
+    # ANALYSIS(Opus/OpenClaw)→DOCS→(next lap | REPORT→gate)
+    main_loop_workflow: doc-loop
     improvement_loop_workflow: improvement-loop.yaml
     recovery_loop_workflow: recovery-loop.yaml
     enrich_workflow: enrich.yaml
@@ -131,6 +149,8 @@ bridge:
         target: agent:opencode
       - pattern: '@VTO-Claude'
         target: agent:claude
+      - pattern: '@VTO-DocsManager'
+        target: agent:docsmanager
 
     # Reaction-based transitions
     reaction:

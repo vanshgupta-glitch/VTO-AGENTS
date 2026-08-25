@@ -6,3 +6,6 @@ token_env: SLACK_BOT_VIDEO
 channel: swarm-video
 backed_by: operation:video.run + skill:vto/visual-diff
 authority: A0
+# VIDEO_UI_TEST stage of the doc-loop: plays every .y4m in tools/video-test/videos/ (reference
+# clips + test clips, 30s–1min each) through the fake camera, observes 60s per clip, and posts
+# per-clip verdicts on whether frame removal is working. Start + result post to #swarm-video.

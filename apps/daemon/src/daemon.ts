@@ -5,7 +5,7 @@
  * cross-machine overflow physically happens: whichever machine has a free worker claims next.
  */
 import { hostname } from 'node:os';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import {
   registerMachine,
@@ -57,11 +57,13 @@ function ensureTaskDoc(cwd: string, rel: string, goal: string): void {
   const skel = [
     `# Task: ${goal || '(no goal)'}`,
     '',
-    '> Shared swarm task file. Each agent READS this, does its part, and UPDATES its own `## <STAGE>` section so the next agent can pick it up.',
+    '> Shared swarm task file. Each agent READS this, does its part, and UPDATES its own `## <STAGE>` section so the next agent can pick it up. Operation results (build/test/video/accuracy) are appended by the daemon.',
     '',
     '## Goal', goal || '', '',
     '## Context', '_(admin: known state, constraints, success criteria)_', '',
-    '## SEED', '', '## ROUTE', '', '## RESEARCH', '', '## CODE', '', '## REPORT', '',
+    '## ADMIN', '', '## TASKS', '', '## SUBTASKS', '', '## RESEARCH', '', '## CRITIC', '',
+    '## CODE', '', '## BUILD', '', '## CODE_TEST', '', '## DEPLOY', '', '## VIDEO_UI_TEST', '',
+    '## RESULTS', '', '## ANALYSIS', '', '## DOCS', '', '## REPORT', '',
   ].join('\n');
   writeFileSync(abs, skel, 'utf8');
 }
@@ -79,10 +81,75 @@ const OP_POST_BOT: Record<string, string> = {
   video: 'videotester',
   accuracy: 'accuracy',
 };
-/** LLM roles without their own Slack bot post under a stand-in (openclaw = Claude-haiku coder → coder). */
-const LLM_POST_BOT: Record<string, string> = { openclaw: 'coder' };
+/** LLM roles without their own Slack bot post under a stand-in (openclaw = Claude-haiku coder →
+ *  coder; analyst = Opus via OpenClaw → the Claude/Opus-tier bot identity). */
+const LLM_POST_BOT: Record<string, string> = { openclaw: 'coder', analyst: 'claude' };
 const postAgentFor = (w: WorkerDef): string =>
   w.runtime === 'operation' ? (OP_POST_BOT[w.role] ?? 'admin') : (LLM_POST_BOT[w.role] ?? w.role);
+
+/**
+ * Each role's DEPARTMENT channel — the standing work-report destination (AGENT-PROFILES §1).
+ * Besides the reply in the originating channel, every finished task posts a compact work report
+ * here under the agent's own bot identity, so the operator can watch each department channel and
+ * see what the inner loop actually did — not just the admin's verdict. Roles missing here (or
+ * whose department IS the originating channel) skip the extra post.
+ */
+const ROLE_REPORT_CHANNEL: Record<string, string> = {
+  admin: 'swarm-admin',
+  researcher: 'swarm-research',
+  critic: 'swarm-critique',
+  coder: 'swarm-code',
+  openclaw: 'swarm-code', // posts under coder
+  opencode: 'swarm-code',
+  docsmanager: 'swarm-docs', // its Slack app exists now (SLACK_BOT_DOCSMANAGER)
+  analyst: 'swarm-analysis', // Opus-via-OpenClaw lap analysis; posts under the claude bot
+  build: 'swarm-tests',
+  lint: 'swarm-tests',
+  test: 'swarm-tests',
+  deploy: 'swarm-admin', // no dedicated deploy bot → admin
+  video: 'swarm-video',
+  accuracy: 'swarm-accuracy',
+};
+
+/**
+ * Department post when a worker picks up admin-routed work — the "I've started" line, so the
+ * operator sees live who claimed what, before the result exists. Same channel map + skip rule
+ * as the completion report. Never throws.
+ */
+async function postStartReport(w: WorkerDef, task: Task): Promise<void> {
+  const channel = ROLE_REPORT_CHANNEL[w.role];
+  if (!channel || channel === task.channel) return;
+  const p = task.payload as TaskPayload;
+  const brief = (p.text ?? p.goal ?? '').replace(/\s+/g, ' ').trim().slice(0, 220);
+  try {
+    await enqueuePost({
+      channel,
+      agent: postAgentFor(w),
+      text:
+        `:inbox_tray: *starting* — task ${task.id} (${task.kind})` +
+        `${task.channel ? `  ·  from #${task.channel}` : ''}${brief ? `\n> ${brief}` : ''}`,
+    });
+  } catch (e) {
+    console.warn(`[daemon] start-report post failed: ${(e as Error).message.slice(0, 120)}`);
+  }
+}
+
+/** Post the department work report. Never throws — reporting must never fail the task itself. */
+async function postWorkReport(w: WorkerDef, task: Task, ok: boolean, summary: string): Promise<void> {
+  const channel = ROLE_REPORT_CHANNEL[w.role];
+  if (!channel || channel === task.channel) return;
+  try {
+    await enqueuePost({
+      channel,
+      agent: postAgentFor(w),
+      text:
+        `:clipboard: *work report* — task ${task.id} (${task.kind}) ${ok ? 'DONE' : 'FAILED'}` +
+        `${task.channel ? `  ·  from #${task.channel}` : ''}\n${(summary || '(empty)').slice(0, 700)}`,
+    });
+  } catch (e) {
+    console.warn(`[daemon] work-report post failed: ${(e as Error).message.slice(0, 120)}`);
+  }
+}
 
 function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
   switch (w.op) {
@@ -95,7 +162,9 @@ function buildOperation(w: WorkerDef, payload: TaskPayload): Operation {
     case 'deploy':
       return { op: 'deploy' };
     case 'video':
-      return { op: 'video', url: machine.storeUrl ?? '', password: machine.storePassword ?? '', seconds: 20 };
+      // 60s per clip: the fake-camera harness plays every .y4m (reference + test videos, 30s–1min
+      // each) and needs the full clip observed to judge frame removal, not just the first seconds.
+      return { op: 'video', url: machine.storeUrl ?? '', password: machine.storePassword ?? '', seconds: 60 };
     case 'accuracy':
       return { op: 'accuracy' };
     default:
@@ -189,6 +258,7 @@ async function chainOnFailure(task: Task, failureText: string): Promise<void> {
 async function handleTask(w: WorkerDef, task: Task): Promise<void> {
   const payload = task.payload as TaskPayload;
   try {
+    await postStartReport(w, task);
     let ok = true;
     let text: string;
     if (w.runtime === 'operation') {
@@ -201,6 +271,22 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
       ok = res.ok;
       const secs = Math.round(res.durationMs / 1000);
       text = `*[${res.op}]* ${res.summary}  _(${secs}s)_${ok ? '' : `\n\`\`\`${res.tail.slice(-900)}\`\`\``}`;
+      // Doc-driven runs: ops can't edit the shared task .md themselves, so the daemon appends their
+      // result — the ANALYSIS/DOCS stages read the doc and must see build/test/video/accuracy output.
+      if (payload.taskDoc) {
+        try {
+          const abs = join(machine.repoPath?.replace(/\//g, '\\') ?? process.cwd(), payload.taskDoc);
+          if (existsSync(abs)) {
+            appendFileSync(
+              abs,
+              `\n\n### ${res.op} result — ${ok ? 'OK' : 'FAILED'} (${new Date().toISOString()})\n${res.summary}\n\`\`\`\n${res.tail.slice(-1500)}\n\`\`\`\n`,
+              'utf8',
+            );
+          }
+        } catch (e) {
+          console.warn(`[daemon] task-doc append failed: ${(e as Error).message.slice(0, 120)}`);
+        }
+      }
     } else {
       const cwd = machine.repoPath?.replace(/\//g, '\\') ?? process.cwd(); // cwd so agents edit the repo
       const base = (payload.text ?? '').replace(new RegExp(`@vto-${w.role}`, 'ig'), '').trim();
@@ -220,6 +306,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         threadTs: payload.ts ?? null,
       });
     }
+    await postWorkReport(w, task, ok, text);
     console.log(`[daemon] ${w.role} ${ok ? 'DONE' : 'FAILED'} task ${task.id}`);
     if (ok) await chainNext(task, text);
     else await chainOnFailure(task, text);
@@ -234,6 +321,7 @@ async function handleTask(w: WorkerDef, task: Task): Promise<void> {
         threadTs: payload.ts ?? null,
       });
     }
+    await postWorkReport(w, task, false, msg);
     console.warn(`[daemon] ${w.role} ERROR task ${task.id}: ${msg.slice(0, 200)}`);
     await chainOnFailure(task, msg);
   }

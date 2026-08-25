@@ -23,6 +23,10 @@ export function getPool(): pg.Pool {
     // Override per process with SWARM_DB_POOL_MAX if a machine genuinely needs more.
     const max = Number(process.env.SWARM_DB_POOL_MAX) || 4;
     pool = new Pool({ connectionString: url, max, idleTimeoutMillis: 30_000 });
+    // A dropped pooler connection emits 'error' on the idle client; unhandled, that event KILLED
+    // the gateway overnight (2026-08-25). Log and carry on — the pool replaces dead clients, and
+    // in-flight queries reject to their own callers.
+    pool.on('error', (e) => console.warn('[db] pool error (connection dropped, continuing):', e.message));
   }
   return pool;
 }
@@ -91,10 +95,13 @@ export async function registerWorker(w: {
   maxConcurrent: number;
 }): Promise<void> {
   await getPool().query(
+    // active = 0 on re-registration: a fresh daemon has nothing in flight — a crash mid-task
+    // otherwise leaves a stale active>0 that permanently eats claim capacity (found 2026-08-25).
     `insert into workers (id, machine_id, role, runtime, max_concurrent, active, status, last_heartbeat)
      values ($1, $2, $3, $4, $5, 0, 'idle', now())
      on conflict (id) do update set role = excluded.role, runtime = excluded.runtime,
-       max_concurrent = excluded.max_concurrent, status = 'idle', last_heartbeat = now()`,
+       max_concurrent = excluded.max_concurrent, status = 'idle', last_heartbeat = now(),
+       active = 0`,
     [w.id, w.machineId, w.role, w.runtime, w.maxConcurrent],
   );
 }

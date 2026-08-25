@@ -4,7 +4,7 @@ id: skills
 type: specification
 status: active
 created: 2026-08-08
-updated: 2026-08-08
+updated: 2026-08-24
 implements: "[[ADR-002-skills-architecture]]"
 tags: [skills, knowledge, operations, catalogue]
 ---
@@ -150,6 +150,14 @@ A skill change runs its own goldens **plus the goldens of every agent that pins 
 | **accuracy-interpretation** | Explaining what a composite score means given which terms were active | `accuracy.read` | claude |
 | **patent-teardown** | Inferring backend behaviour from patent claims plus observed API traffic | `web.fetch`, `web.har` | researcher |
 | **competitor-probe** | Instrumenting a competitor demo to capture request/response and bundle behaviour | `web.render`, `web.har` | researcher |
+| **vto-research** | Cron heartbeat tick: claim the lowest `status: assigned` research task, fire its brief to OpenCode (OpenClaw fallback), validate the OKF findings, Tier-1 refute, close out for Hermes | `web.fetch`, `documents.read`, `documents.write` | claude |
+
+> `vto-research` is deployed as a Claude Code user-level skill at
+> `C:\Users\ankur.singh\.claude\skills\vto-research\SKILL.md` (invoked by the `vto-research` cron job),
+> not in the swarm skills tree. It implements [[F011 orchestration-automation]] Config 1 and
+> [[Orchestration-Flows]] flows 1.4–1.6 + 3.1. Claude only orchestrates and validates — the research
+> itself executes on the free runtimes (OpenCode big-pickle → OpenClaw claude-haiku-4-5), and the
+> Tier-1 refuter is likewise a cheap-model call.
 
 ### `shopify` — the platform
 

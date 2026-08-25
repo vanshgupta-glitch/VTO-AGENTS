@@ -1,0 +1,30 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: analyst
+display_name: VTO Analyst
+tier: 1
+authority: A3
+promotion_clause: >
+  The lap verdict is judgment, not mechanics — it decides whether the loop spends another lap.
+  Runs on the highest tier (Opus via OpenClaw) because a wrong CONTINUE burns a lap and a
+  wrong DONE ships an unfinished result to the human gate.
+
+runtime: openclaw
+model: anthropic/claude-opus-4-8
+openclaw_agent: vto-analyst
+token_env: SLACK_BOT_CLAUDE   # posts under the Opus-tier (claude) bot until a dedicated app exists
+primary_channel: swarm-analysis
+
+context_policy: documents-only
+codebase: read-only
+soul: soul/analyst.md
+
+capabilities: [analysis.lap-verdict, interpret.verification, report.compile]
+allowed_operations: [documents.read, documents.write]
+skills: [vto/accuracy-interpretation@^1, report-writing@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+
+executor: null
+recovery: { max_attempts: 2, escalates_to: claude, consult_solutions: true }
+requires_precode_critique: false
+reports: { on_success: admin, on_escalation: claude }
+enabled: true

@@ -1,0 +1,29 @@
+{
+  "_comment": "Slack app manifest for the VTO Documents Manager bot. Create at https://api.slack.com/apps -> Create New App -> From an app manifest -> pick the Vto-Agentic workspace -> paste this JSON. Then: Install to Workspace, copy the Bot User OAuth Token (xoxb-) into config/.secrets.env as SLACK_BOT_DOCSMANAGER, remove the docsmanager entry from LLM_POST_BOT in apps/daemon/src/daemon.ts, rebuild, and invite @VTO-DocsManager to #swarm-docs and #swarm-admin (or run swarmctl bootstrap invite).",
+  "display_information": {
+    "name": "VTO DocsManager",
+    "description": "Session ledger, context handoff, compaction watch for the VTO swarm",
+    "background_color": "#2c2d30"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "VTO-DocsManager",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "channels:read",
+        "channels:history",
+        "groups:read"
+      ]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

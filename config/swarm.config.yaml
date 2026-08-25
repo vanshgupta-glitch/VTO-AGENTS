@@ -2,7 +2,7 @@
 control:
   target_accuracy: 0.98
   max_attempts_per_theme: 2
-  max_loops_per_work_order: 10
+  max_loops_per_work_order: 40
   daily_cost_cap_usd: 50
   report_max_chars: 2000
   human_gate_channel: swarm-human-gate

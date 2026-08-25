@@ -35,13 +35,16 @@ Claude (strategist) reads this document to create or repair runtime profiles so 
 | admin | 2 | hermes | openrouter/deepseek/deepseek-v4-flash | swarm-admin |
 | researcher | 2 | hermes | openrouter/deepseek/deepseek-v4-flash | swarm-research |
 | critic | 2 | hermes | openrouter/qwen/qwen3-coder-flash | swarm-critique |
-| coder | 2 | hermes | openrouter/qwen/qwen3-coder-flash | swarm-code |
+| coder | 2 | openclaw | anthropic/claude-haiku-4-5 (agent `vto-coder-rohit`) | swarm-code |
+| docsmanager | 2 | hermes | openrouter/deepseek/deepseek-v4-flash | swarm-docs |
+| analyst | 1 | openclaw | anthropic/claude-opus-4-8 | swarm-analysis |
 | openclaw | 3 | openclaw | anthropic/claude-haiku-4-5 | (executor) |
 | opencode | 3 | opencode | opencode/big-pickle | swarm-dev |
 
 - Executors (openclaw, opencode) run on behalf of coder/researcher — they are process hosts, not deciders (ADR-001).
-- Coder's executor is `openclaw`; researcher's executor is `opencode`.
+- Coder IS OpenClaw now (2026-08-25): agent `vto-coder-rohit`, Haiku, dedicated synced workspace (`packages/extensions/app/.swarm-tasks` mirror both ways — NEVER the live repo). Researcher's executor is `opencode`.
 - Model pins live in `agents/<id>/agent.yaml`; the rendered bridge config mirrors them.
+- Analyst (added 2026-08-24) is the doc-loop's ANALYSIS stage: OpenClaw agent `vto-analyst` pinned to Opus. It has no dedicated Slack app — it posts under the claude bot token into `#swarm-analysis` (daemon `LLM_POST_BOT`).
 
 ---
 
@@ -53,7 +56,7 @@ Verified 2026-08-10 against OpenRouter listings. Prices per 1M tokens.
 |---|---|---|---|---|---|
 | claude-opus-4-8 | Claude (subscription) | $5 | $25 | 1M | Strategist — draws on Max 20x plan |
 | claude-haiku-4-5 | Claude (subscription) | $1 | $5 | 200K | OpenClaw executor — lowest subscription tier |
-| openrouter/deepseek/deepseek-v4-flash | OpenRouter | $0.08 | $0.252 | 1.05M | Admin + Researcher |
+| openrouter/deepseek/deepseek-v4-flash | OpenRouter | $0.08 | $0.252 | 1.05M | Admin + Researcher + Documents Manager |
 | openrouter/qwen/qwen3-coder-flash | OpenRouter | $0.195 | $0.975 | 1M | Critic + Coder |
 | opencode/big-pickle | local/free | $0 | $0 | — | OpenCode executor |
 
@@ -87,6 +90,7 @@ hermes profile create admin
 hermes profile create researcher
 hermes profile create critic
 hermes profile create coder
+hermes profile create docsmanager
 ```
 
 Or clone an existing working profile to inherit config + .env + skills:
@@ -116,6 +120,7 @@ Per-agent model map:
 | researcher | deepseek/deepseek-v4-flash |
 | critic | qwen/qwen3-coder-flash |
 | coder | qwen/qwen3-coder-flash |
+| docsmanager | deepseek/deepseek-v4-flash |
 
 ### 3.4 Writing SOUL.md
 

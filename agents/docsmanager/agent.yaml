@@ -1,0 +1,30 @@
+# GENERATED SOURCE — edit this file; downstream configs are rendered from it.
+id: docsmanager
+display_name: VTO Documents Manager
+tier: 2
+authority: A3
+promotion_clause: >
+  Distillation is generative — deciding what the next session must know is a judgment
+  no fresh-session role can hold for itself. Sole writer of the context handoff;
+  owns the session ledger and the compaction watch.
+
+runtime: hermes
+model: openrouter/deepseek/deepseek-v4-flash
+token_env: SLACK_BOT_DOCSMANAGER
+primary_channel: swarm-docs
+also_reads: [swarm-admin, swarm-command, vto-admin]
+
+context_policy: discipline
+codebase: any                      # ledgers across codebases; writes ONLY doc/CONTEXT-HANDOFF.md
+soul: soul/docsmanager.md
+
+capabilities: [context.ledger, context.handoff, context.checkpoint, compaction.watch, staleness.watch]
+allowed_operations: [documents.read, documents.write, queue.read]
+skills: [report-writing@^1, stuck-diagnosis@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+
+executor: null
+recovery: { max_attempts: 2, escalates_to: admin, consult_solutions: false }
+requires_precode_critique: false
+reports: { on_success: admin, on_escalation: admin, on_compaction: human }
+enabled: true

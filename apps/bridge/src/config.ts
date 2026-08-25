@@ -32,6 +32,7 @@ export type AgentKey =
   | 'critic'
   | 'researcher'
   | 'coder'
+  | 'docsmanager'
   | 'claude'
   | 'opencode'
   | 'testrunner'
@@ -45,6 +46,7 @@ export const AGENTS: Record<AgentKey, { tokenEnv: string }> = {
   critic: { tokenEnv: 'SLACK_BOT_CRITIC' },
   researcher: { tokenEnv: 'SLACK_BOT_RESEARCH' },
   coder: { tokenEnv: 'SLACK_BOT_CODER' },
+  docsmanager: { tokenEnv: 'SLACK_BOT_DOCSMANAGER' },
   claude: { tokenEnv: 'SLACK_BOT_CLAUDE' },
   opencode: { tokenEnv: 'SLACK_BOT_OPENCODE' },
   testrunner: { tokenEnv: 'SLACK_BOT_TEST' },

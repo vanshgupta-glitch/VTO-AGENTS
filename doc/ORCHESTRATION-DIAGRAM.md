@@ -210,6 +210,45 @@ when it runs) is not yet assembled automatically. Closing this is the retrieval/
 - **Pre-code critique gate (D-005):** a code task can't be claimed until a passing critique row exists.
 - **Overflow (D-032):** one pool per role; a worker claims only with a free slot; first free worker on either machine wins — implicit, no hand-off messages.
 
+## Work reports — every agent posts to its department channel (2026-08-24)
+
+**The rule:** an agent posts to its department channel, under its own bot identity, **twice per
+task**: a **start report** the moment it claims admin-routed work (`:inbox_tray: starting — task
+<id> (<kind>) · from #<origin>` + the first line of the ask), and a **work report** when it
+completes or fails — in addition to the reply in the originating channel and the admin's verdict.
+The admin check stays; what was checked is now also visible, live.
+The operator reads department channels the way a boss reads team channels — every employee's work
+is inspectable without opening the vault or the DB.
+
+| Role | Department channel |
+|---|---|
+| admin, deploy | #swarm-admin |
+| researcher | #swarm-research |
+| critic | #swarm-critique |
+| coder, openclaw, opencode | #swarm-code |
+| build, lint, test | #swarm-tests |
+| video | #swarm-video |
+| accuracy | #swarm-accuracy |
+| docsmanager | #swarm-docs *(pending — Slack app not created yet)* |
+
+**Mechanisms** (both go through the shared `post_queue`, so the gateway posts under the agent's
+own bot and the per-channel rate guards apply):
+
+- **Swarm loop:** `apps/daemon` — `postStartReport()` fires at the top of `handleTask` (claim
+  time); `postWorkReport()` fires after `finishTask`, posting `:clipboard: work report — task
+  <id> (<kind>) DONE|FAILED · from #<origin>` + the first ~700 chars of the result to
+  `ROLE_REPORT_CHANNEL[role]`. Both are skipped when the department IS the originating channel,
+  and neither can throw — reporting never fails the task.
+- **Vault loops** (vto-research heartbeat, Hermes/OpenClaw missions):
+  `npx tsx scripts/agent-report.ts --agent <role> --channel <swarm-*> --file <report.md>` from the
+  vault root — same `enqueuePost` contract, loads `SWARM_DATABASE_URL` from `config/.secrets.env`.
+
+**Report content:** task id + title, who executed it, outcome, finding/artifact links (vault
+paths), verdicts, anything skipped. A summary a human can audit in ten seconds — not a log dump.
+
+⚠ **Cutover:** `postWorkReport` ships in daemon code — both machines' daemons must run the updated
+code before reports appear from the swarm loop (same version-skew rule as every daemon change).
+
 ## Status (2026-08-12)
 
 - ✅ **pgmq queue (D-013 cont.) + dual peer gateways (D-036) — DONE + applied + proven (uncommitted).**

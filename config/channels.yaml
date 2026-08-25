@@ -3,7 +3,9 @@ channels:
   - name: swarm-command
     topic: "Human to strategist. Goals in, digest out."
     private: false
-    members: ['claude', 'admin']
+    # Every reply-capable bot: task replies land in the ORIGIN channel, and the operator pings
+    # agents here — a bot missing from this list fails its reply (caught live 2026-08-25).
+    members: ['claude', 'admin', 'critic', 'researcher', 'coder', 'docsmanager', 'opencode', 'testrunner', 'videotester', 'accuracy', 'scout']
     id: C0BP7106UF4
   - name: swarm-analysis
     topic: "Analysis, narrative, work orders."
@@ -11,14 +13,14 @@ channels:
     members: ['claude', 'admin']
     id: C0BP3GJCDK7
   - name: swarm-docs
-    topic: "Progressive document changes; ENRICH output."
+    topic: "Progressive document changes; ENRICH output; session ledger + context handoff."
     private: false
-    members: ['claude']
+    members: ['claude', 'docsmanager', 'admin']
     id: C0BP710NS4S
   - name: swarm-admin
     topic: "Decomposition, queue, routing."
     private: false
-    members: ['admin', 'claude', 'critic']
+    members: ['admin', 'claude', 'critic', 'docsmanager']
     id: C0BQ1BH7BUY
   - name: swarm-critique
     topic: "Pre-code and pre-plan review."
@@ -38,7 +40,7 @@ channels:
   - name: swarm-code
     topic: "Pull requests and diffs."
     private: false
-    members: ['coder', 'admin', 'critic']
+    members: ['coder', 'admin', 'critic', 'opencode']
     id: C0BP8UYBVB3
   - name: swarm-tests
     topic: "Type, lint, unit and build results."
@@ -63,5 +65,5 @@ channels:
   - name: swarm-incidents
     topic: "Errors, cap breaches, circling, watchdog."
     private: false
-    members: ['admin', 'claude']
+    members: ['admin', 'claude', 'docsmanager']
     id: C0BPAMTR6DS

@@ -49,6 +49,9 @@ const LEASE_TTL_SECS = 30;
 let holdsLease = false;
 
 const PASS_RE = /\bPASS(ED)?\b/i;
+// Continuous-loop bound — mirrors swarm.config.yaml `max_loops_per_work_order`. The doc-loop runs
+// lap after lap until the analyst says DONE or an error halts it; this cap is the cost backstop.
+const MAX_LAPS = 40;
 
 function isPass(text: string): boolean {
   return PASS_RE.test(text);
@@ -70,6 +73,9 @@ function stageText(def: WorkflowDef, stage: Stage, run: WorkflowRun, extra?: str
       `The shared task file is "${doc}" (relative to your current working directory).`,
       `FIRST read that file. ${produce} Do the work directly in the repo where relevant.`,
       `THEN update "${doc}": append/refresh your "## ${stage.id}" section with what you did or found so the next agent can pick it up. Keep your chat reply to a short status.${decide}`,
+      // Capped evidence from the previous stage (op results etc.) so judging stages (CRITIC/ANALYSIS)
+      // see the freshest output even if a doc write was missed. Small on purpose — the doc is primary.
+      run.carry['last_artifact'] ? `Latest stage output (evidence):\n${String(run.carry['last_artifact']).slice(0, 1200)}` : '',
       extra ?? '',
     ].filter(Boolean).join('\n\n');
   }
@@ -123,16 +129,41 @@ async function advanceTo(run: WorkflowRun, def: WorkflowDef, target: string, rea
   }
 }
 
-/** Consume a `route:<role>` failure: spawn a rework task for the target role, stay on the stage. */
+/** Max rework cycles for ONE stage within a lap before the loop stops and a human is called. */
+const MAX_REWORKS_PER_STAGE = 3;
+
+/** Consume a `route:<role>` failure: spawn a rework task for the target role, stay on the stage.
+ *  Same-problem loop guard: after MAX_REWORKS_PER_STAGE cycles on the same stage in one lap,
+ *  don't spin a 4th — report to the human (human-gate channel + escalation row) and halt. */
 async function routeTo(run: WorkflowRun, def: WorkflowDef, stage: Stage, role: string, reason: string): Promise<void> {
+  const key = `rework_${stage.id}`;
+  const count = (run.carry[key] as number | undefined) ?? 0;
+  if (count >= MAX_REWORKS_PER_STAGE) {
+    const lap = (run.carry['lap'] as number | undefined) ?? 1;
+    await createEscalation({ taskId: null, reason: `${def.name} run #${run.id}: ${stage.id} failed ${count} rework cycles (lap ${lap}) — ${reason.slice(0, 300)}`, toAgent: 'admin' });
+    await enqueuePost({
+      channel: HUMAN_GATE_CHANNEL || run.channel || 'swarm-command',
+      agent: 'admin',
+      text: `:rotating_light: *NEEDS HUMAN* — ${def.name} run #${run.id} halted: stage *${stage.id}* failed ${count} rework cycles in lap ${lap} (same problem looping).\nLast failure: ${reason.slice(0, 400)}`,
+    });
+    return advanceTo(run, def, 'halt', `${stage.id} hit the ${MAX_REWORKS_PER_STAGE}-rework cap — human notified`);
+  }
+  await updateWorkflowRun(run.id, { carry: { ...run.carry, [key]: count + 1 } });
+  // Op-stage rework = a FIX job, not a redo of the op: telling the coder to "produce the
+  // video_verdicts" sent it chasing the harness (run #16). Name the real job instead.
+  const text = stage.executor.kind === 'operation'
+    ? `(rework ${def.name}/${stage.id}) The "${stage.executor.op}" operation FAILED. Diagnose the root cause and FIX it directly in the repo (edit files, keep the change minimal) so the operation passes on the next attempt — do NOT try to run the operation yourself. Failure:\n${reason}\n\nThe shared task file is "${(run.carry['taskDoc'] as string | undefined) ?? ''}" — read it for context and append your fix notes to its "## ${stage.id}" section.`
+    : `(rework ${def.name}/${stage.id}) ${reason}\n\n${stageText(def, stage, run)}`;
   await createStageTask({
     runId: run.id,
     stage: `${stage.id}:rework`,
     role,
     kind: 'rework',
     payload: {
-      text: `(rework ${def.name}/${stage.id}) ${reason}\n\n${stageText(def, stage, run)}`,
+      text,
       channel: run.channel,
+      taskDoc: run.carry['taskDoc'],
+      pinnedMachine: run.carry['pinnedMachine'],
     },
     channel: run.channel,
   });
@@ -147,10 +178,32 @@ async function applyResult(run: WorkflowRun, def: WorkflowDef, stage: Stage, tas
       let key = (m?.[1] ?? '').toUpperCase();
       const rounds = (run.carry['research_rounds'] as number | undefined) ?? 0;
       if (key === 'RESEARCH' && rounds >= 2) key = 'EXECUTE'; // enough research → execute
+      // Critic BLOCK cap: after 2 blocks in one lap, force PASS — the loop must keep moving.
+      const blocks = (run.carry['block_rounds'] as number | undefined) ?? 0;
+      if (key === 'BLOCK' && blocks >= 2) {
+        await post('BLOCK-CAP', `${stage.id} blocked ${blocks}x this lap → forcing PASS`, run);
+        key = 'PASS';
+      }
+      // Lap cap: the continuous loop is bounded so a never-satisfied analyst can't spin forever.
+      const lap = (run.carry['lap'] as number | undefined) ?? 1;
+      if (key === 'CONTINUE' && lap >= MAX_LAPS) {
+        await post('LAP-CAP', `lap ${lap} hit the ${MAX_LAPS}-lap cap → wrapping up (DONE)`, run);
+        key = 'DONE';
+      }
       const target = stage.transitions.on_decision[key];
       if (target) {
-        const nextCarry: Record<string, unknown> = { ...run.carry, last_artifact: output.slice(0, 2000) };
+        let nextCarry: Record<string, unknown> = { ...run.carry, last_artifact: output.slice(0, 2000) };
         if (key === 'RESEARCH') nextCarry['research_rounds'] = rounds + 1;
+        if (key === 'BLOCK') nextCarry['block_rounds'] = blocks + 1;
+        if (key === 'CONTINUE') {
+          // New lap: reset per-lap counters (empty retries, rework strikes, research/block rounds)
+          // so they don't accumulate across laps and falsely halt a healthy continuous loop.
+          nextCarry = Object.fromEntries(Object.entries(nextCarry).filter(([k]) => !(k.startsWith('empty_') || k.startsWith('rework_'))));
+          delete nextCarry['research_rounds'];
+          delete nextCarry['block_rounds'];
+          nextCarry['lap'] = lap + 1;
+          await post('LAP', `:repeat: lap ${lap} complete → starting lap ${lap + 1}`, run);
+        }
         await updateWorkflowRun(run.id, { carry: nextCarry });
         await post(stage.id, output.slice(0, 1500), run);
         await post('DECISION', `${stage.id}: ${key} → ${target}`, run);
@@ -282,6 +335,12 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
       await markTaskBlocked(rework.id); // consume the marker so this branch never re-fires
       await updateWorkflowRun(run.id, { error: null });
       await createStageWork(run, stage); // fresh attempt after rework
+    } else if (rework.status === 'failed') {
+      // A FAILED rework must not freeze the stage forever (run #16 sat 16h on exactly this).
+      // Consume it and route again — routeTo's per-lap strike counter halts to a human after 3.
+      await markTaskBlocked(rework.id);
+      await post('REWORK-FAIL', `${stage.id} rework by ${rework.role} failed → re-routing`, run);
+      await routeTo(run, def, stage, rework.role, `rework failed: ${(rework.last_error ?? 'no output').slice(0, 300)}`);
     }
     return; // rework pending or in-flight — stay on this stage
   }
@@ -293,7 +352,8 @@ async function advanceRun(run: WorkflowRun): Promise<void> {
     const id = await createStageWork(run, stage);
     const ex = stage.executor;
     const who = ex.kind === 'agent' ? ex.role : ex.kind === 'operation' ? ex.op : 'human';
-    await post(`▶ ${stage.id}`, `${who} working…`, run); // heartbeat: stage begun → visible progress in Slack
+    const lapNo = (run.carry['lap'] as number | undefined) ?? 1;
+    await post(`▶ ${stage.id}`, `${who} working… (lap ${lapNo})`, run); // heartbeat: stage begun → visible progress in Slack
     if (stage.gate === 'critique') {
       const gated = await getStageTask(run.id, stageId);
       if (gated) await handleCritiqueGate(run, def, stage, gated);

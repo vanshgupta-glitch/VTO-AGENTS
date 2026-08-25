@@ -9,9 +9,9 @@ implements: "[[ADR-001-agent-boundaries]]"
 tags: [agents, specs, personas, prompts]
 ---
 
-# AGENT-SPECS — the five agents
+# AGENT-SPECS — the six agents
 
-Implements [[ADR-001-agent-boundaries]]. Five agents, two executor runtimes, four personas with no agent behind them.
+Implements [[ADR-001-agent-boundaries]]. Six agents, two executor runtimes, four personas with no agent behind them.
 
 Identity prose lives in **[soul/](../soul/)** — one file per agent, authoritative. This document holds the machine-readable definitions and does not restate what is there.
 
@@ -175,7 +175,35 @@ Full identity, refusals, and what "stuck" means for this discipline: **[soul/cod
 
 ---
 
-## 7. Executor runtimes
+## 7. Documents Manager — session ledger
+
+```yaml
+id: docsmanager
+tier: 2
+authority: A3
+promotion_clause: >
+  Distillation is generative — deciding what the next session must know is a
+  judgment no fresh-session role can hold for itself. Sole writer of the context
+  handoff; owns the session ledger and the compaction watch.
+runtime: hermes
+model: <cheap tier — high frequency>
+context_policy: discipline
+codebase: any                      # ledgers across codebases; writes ONLY doc/CONTEXT-HANDOFF.md
+capabilities: [context.ledger, context.handoff, context.checkpoint, compaction.watch, staleness.watch]
+allowed_operations: [documents.read, documents.write, queue.read]
+skills: [report-writing@^1, stuck-diagnosis@^1]
+knowledge: [swarm-protocol@^1, vto-domain@^1]
+recovery: { max_attempts: 2, escalates_to: admin }
+reports: { on_success: admin, on_escalation: admin, on_compaction: human }
+```
+
+Ledgers task assignment and completion into [[CONTEXT-HANDOFF]] (hard ceiling 120 lines, rewritten in place); refreshes it at mid-session checkpoints and session end; on any agent's context compaction, refreshes the handoff from durable state and posts the fresh-session warning to Slack. Warns, never gates. Never enriches `llm.md`/`trajectory.md` — that stays the Strategist's ENRICH.
+
+Full identity, refusals, and what "stuck" means for this discipline: **[soul/docsmanager.md](../soul/docsmanager.md)** — authoritative.
+
+---
+
+## 8. Executor runtimes
 
 Process hosts, not deciders. They hold no authority — but they do carry souls, because they are the roles most prone to drifting outside scope: **[soul/openclaw.md](../soul/openclaw.md)** and **[soul/opencode.md](../soul/opencode.md)**.
 
@@ -192,7 +220,7 @@ Executors receive their codebase's `CLAUDE.md` and `llm.md` alongside the task t
 
 ---
 
-## 8. Personas — identities with no agent
+## 9. Personas — identities with no agent
 
 Slack identities for stages executed by operations. They post; they do not think.
 
@@ -216,13 +244,13 @@ A human reading `#swarm-accuracy` sees "VTO Accuracy" posting a score. Nothing c
 
 ---
 
-## 9. Slack apps
+## 10. Slack apps
 
-**Nine tokens**, down from twelve: five agents + four personas. Admin is the sole listener — it needs Socket Mode, `channels:manage` and `groups:write`; everyone else only posts.
+**Ten tokens**: six agents + four personas. Admin is the sole listener — it needs Socket Mode, `channels:manage` and `groups:write`; everyone else only posts.
 
 ---
 
-## 10. Composition and verification
+## 11. Composition and verification
 
 Prompts are **generated, never hand-written**:
 

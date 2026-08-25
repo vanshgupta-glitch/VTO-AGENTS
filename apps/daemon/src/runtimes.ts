@@ -3,15 +3,62 @@
  * Paths come from the per-machine config (config/machine.local.json), never committed,
  * so each operator's machine points at its own binaries (D-035 / per-machine paths).
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { execFile, spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const execFileP = promisify(execFile);
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+interface RunError extends Error {
+  stdout?: string;
+  killed?: boolean;
+}
+
+/**
+ * Promisified spawn with stdin IGNORED. execFile's default gives the child an open stdin pipe,
+ * and openclaw/opencode (and the claude-cli sessions under them) BLOCK FOREVER waiting on it —
+ * proven 2026-08-25: stdin=pipe hung until the timeout on a trivial ping; stdin=ignore answered
+ * in 27s. Error shape mirrors execFile (.stdout, .killed) because the hermes branch salvages
+ * stdout from dirty exits.
+ */
+function execNoStdin(
+  bin: string,
+  args: string[],
+  opts: { timeout: number; maxBuffer: number; cwd?: string },
+): Promise<{ stdout: string }> {
+  return new Promise((resolveP, rejectP) => {
+    const child = spawn(bin, args, { cwd: opts.cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let killed = false;
+    const cap = (cur: string, b: Buffer): string => {
+      const s = cur + b.toString('utf8');
+      return s.length > opts.maxBuffer ? s.slice(-opts.maxBuffer) : s;
+    };
+    child.stdout.on('data', (b: Buffer) => { stdout = cap(stdout, b); });
+    child.stderr.on('data', (b: Buffer) => { stderr = cap(stderr, b); });
+    // taskkill /T: child.kill() only hits the direct powershell — the openclaw/opencode grandchild
+    // keeps the stdio pipes open and 'close' never fires, so a timeout must reap the whole tree.
+    const timer = setTimeout(() => {
+      killed = true;
+      if (child.pid) spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+      else child.kill();
+    }, opts.timeout);
+    child.on('error', (e) => { clearTimeout(timer); rejectP(e); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0 && !killed) return resolveP({ stdout });
+      const err = new Error(
+        `Command failed${killed ? ' (timeout)' : ''}: ${bin} ${args.join(' ').slice(0, 300)}\n${stderr.slice(-400)}`,
+      ) as RunError;
+      err.stdout = stdout;
+      err.killed = killed;
+      rejectP(err);
+    });
+  });
+}
 
 export type RuntimeName = 'hermes' | 'claude' | 'opencode' | 'openclaw' | 'operation';
 
@@ -31,8 +78,10 @@ export type RuntimePaths = Partial<Record<RuntimeName, string>>;
 const TIMEOUT_MS = 600_000; // agentic runtimes (hermes profiles, openclaw) need room on complex tasks
 const MAX_BUFFER = 20 * 1024 * 1024;
 
-// Source dirs the OpenClaw workspace mirrors to/from the build repo (code only — not build artifacts).
-const SYNC_DIRS = ['packages', 'extensions', 'app'];
+// Source dirs the OpenClaw workspace mirrors to/from the build repo (code only — not build
+// artifacts). `.swarm-tasks` rides along so the doc-driven coder can read + update the shared
+// per-run task .md from inside its workspace (the doc path in the prompt is repo-relative).
+const SYNC_DIRS = ['packages', 'extensions', 'app', '.swarm-tasks'];
 
 /**
  * Mirror source subdirs from `src` into `dst` with robocopy, excluding build artifacts + git. Used to
@@ -70,8 +119,12 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
     if (!bin) throw new Error('hermes path not configured');
     // --ignore-rules: skip AGENTS.md/SOUL/memory/skills injection so the loop's LLM steps answer
     // directly instead of doing multi-minute agentic file exploration (11s vs >5min, measured).
+    // EXCEPT the coder: its whole job is editing files — with --ignore-rules it only DESCRIBES the
+    // change and the stage "succeeds" with no diff (caught live on flow-test run #15, 2026-08-22).
     try {
-      const { stdout } = await execFileP(bin, ['-p', w.profile ?? w.role, '-z', prompt, '--ignore-rules'], opts);
+      const args = ['-p', w.profile ?? w.role, '-z', prompt];
+      if (w.role !== 'coder') args.push('--ignore-rules');
+      const { stdout } = await execNoStdin(bin, args, opts);
       return stripAnsi(stdout).trim();
     } catch (e) {
       // hermes prints the FULL answer to stdout, then sometimes crashes on teardown (exit
@@ -86,13 +139,13 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
   if (w.runtime === 'claude') {
     const bin = paths.claude;
     if (!bin) throw new Error('claude path not configured');
-    const { stdout } = await execFileP(bin, ['-p', prompt, '--model', w.model ?? 'claude-opus-4-8'], opts);
+    const { stdout } = await execNoStdin(bin, ['-p', prompt, '--model', w.model ?? 'claude-opus-4-8'], opts);
     return stripAnsi(stdout).trim();
   }
   if (w.runtime === 'opencode') {
     const bin = paths.opencode;
     if (!bin) throw new Error('opencode path not configured');
-    const { stdout } = await execFileP(
+    const { stdout } = await execNoStdin(
       'powershell.exe',
       ['-NoProfile', '-File', bin, 'run', prompt, '-m', w.model ?? 'opencode/big-pickle'],
       opts,
@@ -113,10 +166,16 @@ export async function runRuntime(w: WorkerDef, prompt: string, paths: RuntimePat
     const args = ['-NoProfile', '-File', bin, 'agent', '--local', '--agent', w.agent ?? w.role,
       '--message-file', pf, '--timeout', '580'];
     if (w.model) args.push('--model', w.model);
-    const { stdout } = await execFileP('powershell.exe', args, ws ? { ...opts, cwd: ws } : opts);
+    const { stdout } = await execNoStdin('powershell.exe', args, ws ? { ...opts, cwd: ws } : opts);
     // Sync OpenClaw's edits back OUT of the workspace into the build repo so `build` compiles them.
     if (ws && cwd) await mirrorDirs(ws, cwd, SYNC_DIRS);
-    return stripAnsi(stdout).trim();
+    // Drop openclaw's diagnostic preamble ([agents/tool-policy], [agent/cli-backend], …) — only the
+    // answer should reach Slack / the dispatcher's DECISION parser.
+    return stripAnsi(stdout)
+      .split(/\r?\n/)
+      .filter((l) => !/^\[agents?\//.test(l.trim()))
+      .join('\n')
+      .trim();
   }
   throw new Error(`unknown runtime ${String(w.runtime)}`);
 }

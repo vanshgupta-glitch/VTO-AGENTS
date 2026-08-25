@@ -107,7 +107,10 @@ export async function execute(op: Operation, cfg: OpConfig): Promise<OpResult> {
     case 'video': {
       const only = op.only ? ` --only ${op.only}` : '';
       const cmd = `cd "${repo}/tools/video-test"; python run_video_test.py --url "${op.url}" --password ${op.password} --trigger "${op.trigger ?? 'button.vto-try-on__button'}" --seconds ${op.seconds ?? 20}${only}`;
-      const { out } = await runPwsh(cmd, repo, 600_000);
+      // 25 min: a full corpus run (6 clips × 60s observe + up to 90s load-wait each) takes ~16-18
+      // min — the old 10-min cap killed the harness mid-run. Keep under recoverStale's 30-min
+      // runMaxSeconds so a live run is never closed as stale. SWARM_CLAIM_VT must exceed this.
+      const { out } = await runPwsh(cmd, repo, 1_500_000);
       const ok = out.includes('VIDEO UI-TEST SUMMARY');
       const summ = out.match(/=== VIDEO UI-TEST SUMMARY ===[\s\S]*?OVERALL: \w+/);
       return done(ok, ok ? (summ ? summ[0] : 'video ran') : 'video FAILED', out);

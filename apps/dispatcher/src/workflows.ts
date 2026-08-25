@@ -170,56 +170,116 @@ const recoveryLoop: WorkflowDef = {
 };
 
 /**
- * doc-loop — the DOCUMENT-DRIVEN engineering loop (the requested flow):
- *   SEED (admin creates the task .md) → ROUTE (hermes reads it, analyses code via mem0, and DECIDES
- *   research-more vs execute) → RESEARCH (updates the doc, back to ROUTE) or CODE (executes from the
- *   doc's plan) → BUILD → TEST → REPORT → HUMAN_GATE.
+ * doc-loop — the DOCUMENT-DRIVEN engineering loop (the operator's 2026-08-24 structure):
+ *   ADMIN (plan) → TASKS → SUBTASKS → RESEARCH → CRITIC (PASS/BLOCK) → CODE → BUILD → CODE_TEST
+ *   → DEPLOY (dev store, D-033 — the harness tests the LIVE storefront, so every lap ships first)
+ *   → VIDEO_UI_TEST (fake-camera playback of the reference + test clips, 60s each, frame-removal
+ *   verdicts) → RESULTS (accuracy score) → ANALYSIS (Opus via OpenClaw: CONTINUE/DONE) → DOCS
+ *   (docsmanager updates the documents after EVERY lap) → back to ADMIN — lap after lap until the
+ *   analyst says DONE, an error halts it, or the lap cap trips.
  * Every agent stage is handed the SAME shared .md by path (run.carry.taskDoc); it reads the doc, does
- * its part, and updates its section so the next agent picks up. All stages are hard-pinned to the
- * origin machine, so they share one local file (accessed locally, executed through the gateway).
+ * its part, and updates its section so the next agent picks it up. Operation stages (build/test/
+ * video/accuracy) get their results appended to the doc by the daemon. All stages are hard-pinned to
+ * the origin machine, so they share one local file. Every stage's start + result also posts to that
+ * role's department Slack channel (the daemon's start/work reports), so the whole lap runs in front
+ * of the operator's eyes.
  */
 const docLoop: WorkflowDef = {
   name: 'doc-loop',
-  entry: 'SEED',
+  entry: 'ADMIN',
   docDriven: true,
   stages: {
-    SEED: {
-      id: 'SEED',
+    ADMIN: {
+      id: 'ADMIN',
       executor: agent('admin'),
-      produces: 'task_document',
-      // The daemon materialises the .md skeleton; admin fills Goal/Context/success-criteria.
-      transitions: { on_success: 'ROUTE', on_empty: 'ROUTE' },
+      produces: 'plan',
+      // The daemon materialises the .md skeleton; admin fills Goal/Context/success-criteria + plan.
+      transitions: { on_success: 'TASKS', on_empty: 'halt' },
     },
-    ROUTE: {
-      id: 'ROUTE',
+    TASKS: {
+      id: 'TASKS',
       executor: agent('admin'),
-      produces: 'decision',
-      // hermes decides; the dispatcher caps research at 2 rounds then forces EXECUTE.
-      transitions: { on_success: 'CODE', on_empty: 'CODE', on_decision: { RESEARCH: 'RESEARCH', EXECUTE: 'CODE' } },
+      produces: 'task_breakdown',
+      transitions: { on_success: 'SUBTASKS', on_empty: 'halt' },
+    },
+    SUBTASKS: {
+      id: 'SUBTASKS',
+      executor: agent('admin'),
+      produces: 'subtask_list',
+      transitions: { on_success: 'RESEARCH', on_empty: 'halt' },
     },
     RESEARCH: {
       id: 'RESEARCH',
       executor: agent('researcher'),
       produces: 'research_findings',
-      transitions: { on_success: 'ROUTE', on_empty: 'ROUTE' },
+      transitions: { on_success: 'CRITIC', on_empty: 'CRITIC' },
+    },
+    CRITIC: {
+      id: 'CRITIC',
+      executor: agent('critic'),
+      produces: 'critique_verdict',
+      // BLOCK sends the lap back to SUBTASKS (capped at 2 blocks per lap by the dispatcher).
+      transitions: { on_success: 'CODE', on_empty: 'CODE', on_decision: { PASS: 'CODE', BLOCK: 'SUBTASKS' } },
     },
     CODE: {
       id: 'CODE',
       executor: agent('coder'),
       produces: 'code_changes',
-      transitions: { on_success: 'BUILD', on_fail: 'ROUTE', on_empty: 'ROUTE' },
+      transitions: { on_success: 'BUILD', on_fail: 'SUBTASKS', on_empty: 'SUBTASKS' },
     },
     BUILD: {
       id: 'BUILD',
       executor: op('build'),
       produces: 'build_result',
-      transitions: { on_success: 'TEST', on_fail: 'route:coder' },
+      transitions: { on_success: 'CODE_TEST', on_fail: 'route:coder' },
     },
-    TEST: {
-      id: 'TEST',
+    CODE_TEST: {
+      id: 'CODE_TEST',
       executor: op('test'),
       produces: 'test_result',
-      transitions: { on_success: 'REPORT', on_fail: 'route:coder' },
+      transitions: { on_success: 'DEPLOY', on_fail: 'route:coder' },
+    },
+    DEPLOY: {
+      id: 'DEPLOY',
+      // Dev-store deploy (D-033, auto) — REQUIRED before the video test: the harness drives the
+      // LIVE storefront, so without this the videotester would exercise the previous lap's code.
+      executor: op('deploy'),
+      produces: 'deploy_version',
+      transitions: { on_success: 'VIDEO_UI_TEST', on_fail: 'route:coder' },
+    },
+    VIDEO_UI_TEST: {
+      id: 'VIDEO_UI_TEST',
+      executor: op('video'),
+      produces: 'video_verdicts',
+      transitions: { on_success: 'RESULTS', on_fail: 'route:coder' },
+    },
+    RESULTS: {
+      id: 'RESULTS',
+      executor: op('accuracy'),
+      produces: 'accuracy_score',
+      transitions: { on_success: 'ANALYSIS', on_fail: 'route:coder' },
+    },
+    ANALYSIS: {
+      id: 'ANALYSIS',
+      executor: agent('analyst'),
+      produces: 'lap_analysis',
+      // Opus (via OpenClaw) judges the lap's evidence. Default (no parseable decision) = keep looping.
+      // on_fail routes back to the analyst itself (retry with the 3-strike rework cap) — without it
+      // a single runtime timeout escalate-halts the whole run.
+      transitions: { on_success: 'DOCS', on_empty: 'DOCS', on_fail: 'route:analyst', on_decision: { CONTINUE: 'DOCS', DONE: 'DOCS_FINAL' } },
+    },
+    DOCS: {
+      id: 'DOCS',
+      executor: agent('docsmanager'),
+      produces: 'document_updates',
+      // End of a lap: docsmanager updates the task doc + vault docs, then the next lap begins.
+      transitions: { on_success: 'ADMIN', on_empty: 'ADMIN', on_fail: 'route:docsmanager' },
+    },
+    DOCS_FINAL: {
+      id: 'DOCS_FINAL',
+      executor: agent('docsmanager'),
+      produces: 'document_updates',
+      transitions: { on_success: 'REPORT', on_empty: 'REPORT', on_fail: 'route:docsmanager' },
     },
     REPORT: {
       id: 'REPORT',

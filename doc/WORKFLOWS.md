@@ -4,7 +4,7 @@ id: workflows
 type: specification
 status: active
 created: 2026-08-08
-updated: 2026-08-08
+updated: 2026-08-24
 implements: "[[ADR-004-workflow-engine]]"
 tags: [workflows, pipeline, stages, transitions]
 ---
@@ -94,7 +94,7 @@ A gate is a blocking precondition checked before a stage may claim work. Gates a
 
 ## 5. `improvement-loop`
 
-The main loop. One work order, one codebase.
+The legacy full loop (the MAIN loop is now `doc-loop` — see §11). One work order, one codebase.
 
 ```yaml
 name: improvement-loop
@@ -355,6 +355,40 @@ The interpreter refuses to start on any of these:
 ## 10. Scope
 
 This is a **sequencer**, not a workflow engine. No parallel-join semantics, no compensation logic, no dynamic stage generation — until something concrete demands them. A pipeline DSL that grows features nobody asked for becomes the framework [[decision]] D-012 rejects.
+
+---
+
+## 11. `doc-loop` — THE MAIN LOOP (2026-08-24 restructure)
+
+The operator's structure of 2026-08-24. Document-driven: every agent stage reads and updates the
+shared per-run task file (`.swarm-tasks/run-<id>.md`); operation results are appended to it by the
+daemon. Executable definition: `apps/dispatcher/src/workflows.ts` — **the definition wins over this prose.**
+
+```
+ADMIN (admin: plan)
+  → TASKS (admin)  → SUBTASKS (admin)
+  → RESEARCH (researcher)
+  → CRITIC (critic: DECISION PASS/BLOCK; BLOCK → SUBTASKS, max 2 blocks per lap)
+  → CODE (coder)
+  → BUILD (op) → CODE_TEST (op:test)
+  ->DEPLOY-> (op:deploy - dev store, D-033: the harness tests the LIVE storefront, so every lap ships first)
+  → VIDEO_UI_TEST (op:video — fake camera plays every .y4m reference/test clip, 60s each,
+                   per-clip frame-removal verdicts)
+  → RESULTS (op:accuracy — the score)
+  → ANALYSIS (analyst: Opus via OpenClaw; DECISION CONTINUE/DONE)
+  → DOCS (docsmanager: updates the documents after EVERY lap)
+      CONTINUE → back to ADMIN (lap counter increments, per-lap counters reset; cap 10 laps)
+      DONE     → DOCS_FINAL → REPORT (admin) → HUMAN_GATE (D-008/D-034)
+```
+
+**Visibility contract:** every stage posts a start line and a work report to its role's department
+channel under its own bot identity (daemon `ROLE_REPORT_CHANNEL`); the dispatcher narrates stage
+transitions, decisions, laps, and gates in the run's origin channel. The loop runs continuously —
+lap after lap — until ANALYSIS says DONE, an unrecoverable error halts it (empty×3, escalation,
+route-fix exhaustion), or the 10-lap cap trips.
+
+**Analyst role:** OpenClaw agent `vto-analyst` pinned to `anthropic/claude-opus-4-8`; posts
+under the Opus-tier (claude) bot into `#swarm-analysis`. Soul: [[soul/analyst]].
 
 ---
 
