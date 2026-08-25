@@ -3,6 +3,10 @@
 # Safe to re-run: skips any component that is already running.
 $v = Split-Path $PSScriptRoot -Parent
 $node = (Get-Command node).Source
+# pgmq claim visibility timeout MUST exceed the longest operation (video op = 25 min) or a live
+# task is redelivered mid-run and double-claimed. Read at db-module load — set it HERE, not in
+# .secrets.env (loadSecrets runs after the db module initialises).
+$env:SWARM_CLAIM_VT = '2400'
 $map = @{ bridge = "gateway.js"; daemon = "daemon.js"; dispatcher = "dispatcher.js" }
 New-Item -ItemType Directory -Force "$v\logs\swarm" | Out-Null
 $running = Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match "dist[\\/](gateway|daemon|dispatcher)\.js" }
