@@ -1,5 +1,10 @@
 # Ops Log
 
+## 2026-08-25 — T042 training: Lyu Google Drive path added (no Kaggle key) + key-drop admin prepared
+
+- `bisenet3_kaggle.py` now has a keyless data path: with no Kaggle datasets attached it gdown-fetches the ORIGINAL Lyu et al. CVPR 2022 synthetic set from its public Drive share (`1X1qkozQbVyz5lUA8xd-lYfy1jauOji46`, github StoryMY/take-off-eyeglasses), pairs the flat `img-...-<type>` naming, and derives 3-class labels (frame = seg geometry, lens = enclosed holes; thickness fallback; `BISENET3_LYU_SEG/IMG` overrides). Attached-dataset path still preferred (exact frame masks).
+- Kaggle API key admin done ahead of Rohit adding the token: `~/.kaggle/` created with a README placeholder; `push_kernel.ps1` = one-command cloud push (reads username from kaggle.json, patches kernel-metadata, pushes, prints watch/poll/fetch commands). Product repo at `0d60f33` (pycache ignored + dropped).
+
 ## 2026-08-25 — Hardening shipped + T042 Kaggle training package + ALL WORK COMMITTED & PUSHED
 
 - **pg pool 'error' handler** in packages/db (the gateway-killer: dropped pooler connection). **SwarmWatchdog** scheduled task (every 2 min, `swarm-logs\swarm-watchdog.ps1`): relaunches dead gateway/dispatcher/daemon + reaps openclaw agent strays >30 min (the stdin-hang leftovers). All three services restarted on the hardened code (watchdog paused during the bounce to avoid double-launch).
