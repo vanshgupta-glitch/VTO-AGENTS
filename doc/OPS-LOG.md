@@ -1,5 +1,11 @@
 # Ops Log
 
+## 2026-08-25 — T042 training LIVE on Kaggle GPU (kernel v2, offline-proof)
+
+- Rohit added the Kaggle API token (`ankursking01`). `push_kernel.ps1` fixed (BOM-less metadata write; slug aligned to Kaggle's title-derived id `bisenet-3-class-frame-lens-face-vto-t042`).
+- v1 FAILED at 33s: API-pushed kernels get NO internet on non-phone-verified accounts → git clone unresolvable. Fix: private dataset `ankursking01/vto-bisenet-code` ships model.py+resnet.py+**79999_iter.pth** (warm-start beats ImageNet init, zero network); pip/ORT best-effort. Phone-verifying the Kaggle account would additionally unlock internet (gdown/Lyu path) for API pushes.
+- **v2 RUNNING** past 17 min with all three datasets attached. Watch: kaggle.com/code/ankursking01/bisenet-3-class-frame-lens-face-vto-t042 · poll `kaggle kernels status` · fetch `kaggle kernels output ... -p out` → local pytest gates → drop passing out/ into face-parsing.PyTorch\res\ → tell @VTO-Admin (T042c).
+
 ## 2026-08-25 — T042 training: Lyu Google Drive path added (no Kaggle key) + key-drop admin prepared
 
 - `bisenet3_kaggle.py` now has a keyless data path: with no Kaggle datasets attached it gdown-fetches the ORIGINAL Lyu et al. CVPR 2022 synthetic set from its public Drive share (`1X1qkozQbVyz5lUA8xd-lYfy1jauOji46`, github StoryMY/take-off-eyeglasses), pairs the flat `img-...-<type>` naming, and derives 3-class labels (frame = seg geometry, lens = enclosed holes; thickness fallback; `BISENET3_LYU_SEG/IMG` overrides). Attached-dataset path still preferred (exact frame masks).
